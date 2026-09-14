@@ -11,6 +11,7 @@ The main functionalities i aim to produce are:
 - Support mutiple vector sizes on request
 - Serialize the db to a local file
 - Deserialize the db from a local file
+
 This project will not (at least in the short term)
 - Provide authentication/authorization to the database or the stored data
 - Provide encryption of any kind for the serialized data
