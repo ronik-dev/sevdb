@@ -1,0 +1,16 @@
+.git
+.gitignore
+
+docs/
+
+build/
+build-docker/
+
+CMakeCache.txt
+CMakeFiles/
+
+*.o
+*.a
+*.so
+
+.DS_Store

@@ -15,3 +15,15 @@ The main functionalities i aim to produce are:
 This project will not (at least in the short term)
 - Provide authentication/authorization to the database or the stored data
 - Provide encryption of any kind for the serialized data
+
+#### Build Test and Run
+The project relies on [Docker](https://www.docker.com/) to provide a consistent C17 build environment with [CMake](https://cmake.org/) and [Criterion](https://criterion.readthedocs.io/en/master/intro.html)* pre-installed. 
+In the future i will provide a build without testing dependencies, but its out of scope for now.
+
+Use the included `Makefile` to interact with the project:
+- **Build the project:** `make build`
+- **Run the test suite:** `make test`
+- **Clean the environment:** `make clean`
+- **Open a dev shell:** `make shell`
+
+\**it is possible that i will switch criterion for another test suite as it looks like it does not fully support C17, even if rn i am not using any C17 unique feature.

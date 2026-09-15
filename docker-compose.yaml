@@ -1,0 +1,11 @@
+services:
+  dev:
+    image: sevdb-dev
+    build: .
+    working_dir: /project
+    volumes:
+      - .:/project
+      - build:/build
+
+volumes:
+  build:
