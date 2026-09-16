@@ -26,3 +26,6 @@ void sevdb_vector_destroy(sevdb_vector *v);
 sevdb_database* sevdb_db_create(int capacity);
 // Database destructor
 void sevdb_db_destroy(sevdb_database *db);
+// Add a vector to database
+sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);
+sevdb_vector* sevdb_db_poll_vector_by_id(sevdb_database *db, int id);

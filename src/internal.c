@@ -1,6 +1,6 @@
-#import "internal.h"
-#import <stdlib.h>
-#import <string.h>
+#include "internal.h"
+#include <stdlib.h>
+#include <string.h>
 
 
 sevdb_vector* sevdb_vector_create(int id, int dimensions ,const float* components){
@@ -18,3 +18,55 @@ void sevdb_vector_destroy(sevdb_vector *v){
     if(v != NULL) free(v);
 }
 
+
+sevdb_database* sevdb_db_create(int capacity){
+    sevdb_database *db = malloc(sizeof(sevdb_database));
+    if(db == NULL) return NULL;
+    db->capacity = capacity;
+    db->count = 0;
+    db->vectors = calloc(capacity, sizeof(sevdb_vector));
+    if(db->vectors == NULL){
+        free(db);
+        return NULL;
+    }
+    return db;
+}
+
+void sevdb_db_destroy(sevdb_database *db){
+    if(db == NULL) return; 
+    if(db->vectors != NULL){
+        for (int i = 0; i < db->capacity; i++){
+            if(db->vectors[i] != NULL){
+                sevdb_vector_destroy(db->vectors[i]);  
+            }
+        }
+        free(db->vectors);
+    }
+    free(db);
+}
+
+sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
+    if(db == NULL || v == NULL) return NULL;
+    if(db->count >= db->capacity) return NULL;
+    //serch for free spot
+    for(int i = 0; i < db->capacity; i++){
+        if(db->vectors[db->count] == NULL){
+            db->vectors[db->count] = v;
+            db->count++;
+            return v;
+        }
+    }
+    return NULL;
+}
+
+sevdb_vector* sevdb_db_poll_vector_by_id(sevdb_database *db, int id){
+    if(db == NULL || db->count == 0) return NULL;
+    sevdb_vector * v = NULL;
+    for(int i = 0; i < db->capacity; i++){
+        v = db->vectors[i];
+        if(v != NULL && v->id == id){
+            return v; 
+        }
+    }
+    return NULL;
+}

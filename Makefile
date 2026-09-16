@@ -5,7 +5,7 @@ build:
 	docker compose run --rm dev cmake --build /build
 
 test: build
-	docker compose run --rm dev ctest --test-dir /build --output-on-failure
+	docker compose run --rm dev /build/test_suite
 
 clean:
 	docker compose down -v
