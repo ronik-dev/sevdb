@@ -59,7 +59,7 @@ sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
     return NULL;
 }
 
-sevdb_vector* sevdb_db_poll_vector_by_id(sevdb_database *db, int id){
+sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, int id){
     if(db == NULL || db->count == 0) return NULL;
     sevdb_vector * v = NULL;
     for(int i = 0; i < db->capacity; i++){
@@ -69,4 +69,18 @@ sevdb_vector* sevdb_db_poll_vector_by_id(sevdb_database *db, int id){
         }
     }
     return NULL;
+}
+
+void sevdb_db_remove_vector_by_id(sevdb_database *db, int id){
+    if(db == NULL || db->count == 0) return;
+    sevdb_vector * v = NULL;
+    for(int i = 0; i < db->capacity; i++){
+        v = db->vectors[i];
+        if(v != NULL && v->id == id){
+            db->vectors[i]=NULL;
+            db->count--;
+            return;
+        }
+    }
+    return;
 }

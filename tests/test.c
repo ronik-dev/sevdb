@@ -1,7 +1,7 @@
 #include <criterion/criterion.h>
 #include "../src/internal.h"
 
-Test(vector, create_and_read) {
+Test(vector, should_create_and_read) {
     float input_components[2] = {4.2f, 5.2f};
     
     sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
@@ -16,7 +16,7 @@ Test(vector, create_and_read) {
     sevdb_vector_destroy(v);
 }
 
-Test(database, create_and_push) {
+Test(database, should_create_and_push) {
 
     //create
     sevdb_database *db = sevdb_db_create(42);
@@ -37,7 +37,7 @@ Test(database, create_and_push) {
     sevdb_db_destroy(db);
 }
 
-Test(database, create_push_and_pull) {
+Test(database, should_create_push_and_read) {
     //create
     sevdb_database *db = sevdb_db_create(42);
 
@@ -46,9 +46,32 @@ Test(database, create_push_and_pull) {
     sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
     sevdb_vector *result = sevdb_db_push_vector(db, v);
 
-    //pull
-    sevdb_vector *search = sevdb_db_poll_vector_by_id(db, 42);
-    cr_assert(v == search, "Search returned wrong memory address");
+    //read
+    sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
+    cr_assert(v == search, "Search by id returned wrong memory address");
+
+    //clean
+    sevdb_db_destroy(db);
+}
+
+
+Test(database, should_create_push_remove_and_read) {
+    //create
+    sevdb_database *db = sevdb_db_create(42);
+
+    //push
+    float input_components[2] = {4.2f, 5.2f};
+    sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
+    sevdb_vector *result = sevdb_db_push_vector(db, v);
+    int number_of_vectors = db->count;
+
+    //remove
+    sevdb_db_remove_vector_by_id(db, 42);
+
+    //read
+    sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
+    cr_assert(search == NULL, "Remove by id did not occour, vector is still present");
+    cr_assert(number_of_vectors = db->count-1, "DB vector count was not succesfully updated");
 
     //clean
     sevdb_db_destroy(db);
