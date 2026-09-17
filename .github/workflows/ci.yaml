@@ -1,0 +1,22 @@
+name: CI
+
+on: 
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: build docker image
+        run: docker compose build dev
+        
+      - name: build project
+        run: make build
+        
+      - name: run tests
+        run: make test
