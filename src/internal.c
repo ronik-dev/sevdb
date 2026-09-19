@@ -1,4 +1,5 @@
 #include "internal.h"
+#include "distance.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -125,3 +126,16 @@ void sevdb_db_remove_vector_by_id(sevdb_database *db, int id){
         }
     }
 }
+
+sevdb_vector** sevdb_db_serch_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k){
+    if(db == NULL || db->count == 0) return NULL;
+    //something top_k_similar_items;
+    sevdb_vector* candidate;
+    float cos_sim;
+    for(int i = 0; i < db->capacity; i++){
+        //cos_sim = get_cosine_similarity()
+        //push to top_k_similar_items (cos_sim,vector);
+    }
+    return NULL;
+}
+

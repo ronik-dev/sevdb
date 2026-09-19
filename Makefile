@@ -5,7 +5,7 @@ build:
 	docker compose run --rm dev cmake --build /build
 
 test: build
-	docker compose run --rm dev sh -c "/build/internal_test_suite && /build/distance_test_suite"
+	docker compose run --rm dev sh -c "/build/internal_test_suite && /build/distance_test_suite && /build/priority_queue_test_suite"
 
 clean:
 	docker compose down -v
