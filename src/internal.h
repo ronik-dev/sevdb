@@ -1,4 +1,5 @@
 #pragma once
+#include <stdbool.h>
 // This struct rappresents the foundamental block of the database.
 // The sevdb_vector is the item that will be saved and queried in this db.
 typedef struct sevdb_vector sevdb_vector;
@@ -44,4 +45,4 @@ sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);
 sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, int id);
 void sevdb_db_remove_vector_by_id(sevdb_database *db, int id);
 
-sevdb_vector** sevdb_db_serch_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k);
+int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list);

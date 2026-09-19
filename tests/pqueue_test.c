@@ -2,8 +2,10 @@
 #include <math.h>
 #include "../src/pqueue.h"
 
+static bool is_min_heap(float a, float b) { return a < b; }
+
 Test(pqueue, should_create_and_peek_single_element) {
-    pqueue *pq = pq_create(5);
+    pqueue *pq = pq_create(5,is_min_heap);
     cr_assert_not_null(pq, "Failed to create priority queue");
 
     int dummy = 42;
@@ -20,7 +22,7 @@ Test(pqueue, should_create_and_peek_single_element) {
 }
 
 Test(pqueue, should_dequeue_in_min_heap_order) {
-    pqueue *pq = pq_create(10);
+    pqueue *pq = pq_create(10,is_min_heap);
 
     int val1 = 1, val2 = 2, val3 = 3, val4 = 4;
     // Insert in unsorted order
@@ -58,7 +60,7 @@ Test(pqueue, should_dequeue_in_min_heap_order) {
 }
 
 Test(pqueue, should_reject_when_capacity_reached) {
-    pqueue *pq = pq_create(2);
+    pqueue *pq = pq_create(2,is_min_heap);
 
     int a = 1, b = 2, c = 3;
     cr_assert(pq_enqueue(pq, 1.0f, &a));
@@ -72,7 +74,7 @@ Test(pqueue, should_reject_when_capacity_reached) {
 }
 
 Test(pqueue, should_handle_empty_safely) {
-    pqueue *pq = pq_create(3);
+    pqueue *pq = pq_create(3,is_min_heap);
     pq_element out;
 
     cr_assert_not(pq_peek(pq, &out), "Peek must return false when queue is empty");
@@ -82,7 +84,7 @@ Test(pqueue, should_handle_empty_safely) {
 }
 
 Test(pqueue, should_reject_nan_priority) {
-    pqueue *pq = pq_create(5);
+    pqueue *pq = pq_create(5,is_min_heap);
     int dummy = 42;
     
     // NAN is defined in math.h
@@ -95,7 +97,7 @@ Test(pqueue, should_reject_nan_priority) {
 }
 
 Test(pqueue, should_clear_queue_successfully) {
-    pqueue *pq = pq_create(5);
+    pqueue *pq = pq_create(5,is_min_heap);
     int dummy = 42;
     
     pq_enqueue(pq, 1.0f, &dummy);
@@ -126,7 +128,7 @@ Test(pqueue, should_handle_null_arguments_safely) {
     cr_assert_eq(pq_get_capacity(NULL), -1);
     
     // Test valid queue but NULL out parameter
-    pqueue *pq = pq_create(5);
+    pqueue *pq = pq_create(5,is_min_heap);
     pq_enqueue(pq, 1.0f, &dummy);
     cr_assert_not(pq_dequeue(pq, NULL));
     cr_assert_not(pq_peek(pq, NULL));
@@ -135,9 +137,9 @@ Test(pqueue, should_handle_null_arguments_safely) {
 }
 
 Test(pqueue, should_reject_invalid_capacity) {
-    pqueue *pq_zero = pq_create(0);
+    pqueue *pq_zero = pq_create(0, is_min_heap);
     cr_assert_null(pq_zero, "pq_create should return NULL for capacity 0");
     
-    pqueue *pq_neg = pq_create(-5);
+    pqueue *pq_neg = pq_create(-5, is_min_heap);
     cr_assert_null(pq_neg, "pq_create should return NULL for negative capacity");
 }

@@ -1,5 +1,6 @@
 #include "internal.h"
 #include "distance.h"
+#include "pqueue.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -127,15 +128,39 @@ void sevdb_db_remove_vector_by_id(sevdb_database *db, int id){
     }
 }
 
-sevdb_vector** sevdb_db_serch_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k){
-    if(db == NULL || db->count == 0) return NULL;
-    //something top_k_similar_items;
+static bool is_max_heap(float a, float b) { return a > b; }
+
+int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list){
+    if(db == NULL || db->count == 0 || v == NULL || out_vector_list == NULL) return 0;
+    
+    pqueue* pq = pq_create(db->count, is_max_heap);
+    if(pq == NULL) return 0;
+
     sevdb_vector* candidate;
     float cos_sim;
+    
     for(int i = 0; i < db->capacity; i++){
-        //cos_sim = get_cosine_similarity()
-        //push to top_k_similar_items (cos_sim,vector);
+        candidate = db->vectors[i];
+        if(candidate == NULL 
+            || candidate->dimensions != v->dimensions) {
+            continue; 
+        }
+        cos_sim = get_cosine_similarity(v->dimensions, v->components, candidate->components);
+        if (!pq_enqueue(pq, cos_sim, candidate)) {
+            pq_destroy(pq);
+            return 0;
+        }
     }
-    return NULL;
+    
+    int retrieved = 0;
+    pq_element out;
+    for(int i = 0; i < k && pq_get_count(pq) > 0; i++){
+        if(pq_dequeue(pq, &out)) {
+            out_vector_list[i] = (sevdb_vector*)out.content;
+            retrieved++;
+        }
+    }
+    
+    pq_destroy(pq);
+    return retrieved; 
 }
-

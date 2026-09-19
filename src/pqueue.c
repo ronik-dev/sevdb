@@ -5,6 +5,7 @@
 struct pqueue {
     int capacity; 
     int count;
+    bool(*comparator)(float,float);
     pq_element *elements;
 };
 
@@ -16,7 +17,8 @@ static void swap(pq_element* pq_el1, pq_element* pq_el2){
 
 static void heapify_up(pqueue* pq, int index){
     if(index > 0
-       && pq->elements[(index - 1) / 2].priority > pq->elements[index].priority) {
+       //&& pq->elements[(index - 1) / 2].priority > pq->elements[index].priority) {
+       && pq->comparator( pq->elements[index].priority, pq->elements[(index - 1) / 2].priority)) {
         swap(&pq->elements[(index - 1) / 2],
              &pq->elements[index]);
         heapify_up(pq, (index - 1) / 2);
@@ -30,11 +32,13 @@ static void heapify_down(pqueue* pq, int index){
     int right = 2 * index + 2;
 
     if (left < pq->count
-        && pq->elements[left].priority < pq->elements[smallest].priority)
+        //&& pq->elements[left].priority < pq->elements[smallest].priority)
+        && pq->comparator(pq->elements[left].priority,pq->elements[smallest].priority))
         smallest = left;
 
     if (right < pq->count
-        && pq->elements[right].priority < pq->elements[smallest].priority)
+        //&& pq->elements[right].priority < pq->elements[smallest].priority)
+        && pq->comparator(pq->elements[right].priority,pq->elements[smallest].priority))
         smallest = right;
 
     if (smallest != index) {
@@ -43,12 +47,13 @@ static void heapify_down(pqueue* pq, int index){
     }
 }
 
-pqueue* pq_create(int capacity){
+pqueue* pq_create(int capacity, pq_compare_fn comparator){
     if(capacity <= 0) return NULL;
     pqueue* pq = malloc(sizeof(pqueue));
     if(pq == NULL) return NULL;
     pq->capacity = capacity; 
     pq->count = 0;
+    pq->comparator = comparator;
     pq->elements = calloc(capacity, sizeof(pq_element));
     if(pq->elements == NULL){
         free(pq);

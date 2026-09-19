@@ -15,12 +15,20 @@ typedef struct pq_element {
     void* content;
 } pq_element;
 
+// Define a type for your comparator function pointer.
+// It should return true if 'a' should be placed closer to the top than 'b'.
+// for example:
+// bool is_min_heap(float a, float b) { return a < b; } // For Euclidean (smaller is better)
+// bool is_max_heap(float a, float b) { return a > b; } // For Cosine (larger is better)
+typedef bool(*pq_compare_fn)(float,float);
+
 // Opaque handle to a priority queue instance.
 typedef struct pqueue pqueue;
+  
 
 // Allocates a queue with room for exactly `capacity` elements.
 // Returns NULL if capacity <= 0 or on allocation failure.
-pqueue* pq_create(int capacity);
+pqueue* pq_create(int capacity,pq_compare_fn comparator);
 
 // Frees the queue and its internal storage. Does NOT free any
 // remaining `content` pointers still in the queue — the caller

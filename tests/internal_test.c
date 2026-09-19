@@ -1,5 +1,7 @@
 #include <criterion/criterion.h>
+#include <stdio.h>
 #include "../src/internal.h"
+#include "../src/distance.h"
 
 Test(vector, should_create_and_read) {
     float input_components[2] = {4.2f, 5.2f};
@@ -56,3 +58,72 @@ Test(database, should_create_push_remove_and_read) {
     sevdb_db_destroy(db);
 }
 
+
+Test(database, should_create_push_and_perform_cosine_similarity_search) {
+    int vector_number = 10;
+    int k = 5;
+
+    sevdb_database *db = sevdb_db_create(vector_number);
+    cr_assert_not_null(db);
+
+    int vector_dimension = 2;
+
+    for (int i = 0; i < vector_number; i++) {
+        float input_components[2] = {
+            1.0f,
+            (float)i * 0.5f
+        };
+
+        sevdb_vector *v =
+            sevdb_vector_create(i, vector_dimension, input_components);
+
+        cr_assert_not_null(v);
+        cr_assert_not_null(sevdb_db_push_vector(db, v));
+    }
+
+    float search_components[2] = {1.0f, 0.0f};
+
+    sevdb_vector *vector_to_compare =
+        sevdb_vector_create(99, vector_dimension, search_components);
+
+    cr_assert_not_null(vector_to_compare);
+
+    sevdb_vector *out_vector_list[5] = {0};
+
+    int number_of_selected_vectors =
+        sevdb_db_search_k_similar_vectors(
+            db,
+            vector_to_compare,
+            k,
+            out_vector_list
+        );
+
+    cr_assert_eq(number_of_selected_vectors, k,
+                 "Expected %d results, got %d",
+                 k,
+                 number_of_selected_vectors);
+
+    for (int i = 0; i < k; i++) {
+        cr_assert_not_null(out_vector_list[i]);
+    }
+
+    for (int i = 0; i < k - 1; i++) {
+        float sim_current = get_cosine_similarity(
+            vector_dimension,
+            sevdb_vector_get_components(vector_to_compare),
+            sevdb_vector_get_components(out_vector_list[i])
+        );
+
+        float sim_next = get_cosine_similarity(
+            vector_dimension,
+            sevdb_vector_get_components(vector_to_compare),
+            sevdb_vector_get_components(out_vector_list[i + 1])
+        );
+
+        cr_assert(sim_current >= sim_next,
+                  "Cosine search returned wrongly ordered list");
+    }
+
+    sevdb_vector_destroy(vector_to_compare);
+    sevdb_db_destroy(db);
+}
