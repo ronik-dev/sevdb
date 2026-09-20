@@ -129,35 +129,52 @@ void sevdb_db_remove_vector_by_id(sevdb_database *db, int id){
 }
 
 static bool is_max_heap(float a, float b) { return a > b; }
+static bool is_min_heap(float a, float b) { return a < b; }
 
 int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list){
     if(db == NULL || db->count == 0 || v == NULL || out_vector_list == NULL) return 0;
     
-    pqueue* pq = pq_create(db->count, is_max_heap);
+    pqueue* pq = pq_create(k, is_min_heap);
     if(pq == NULL) return 0;
 
     sevdb_vector* candidate;
-    float cos_sim;
+    pq_element worst_saved_el;
+    float candidate_cos_sim;
     
     for(int i = 0; i < db->capacity; i++){
         candidate = db->vectors[i];
-        if(candidate == NULL 
-            || candidate->dimensions != v->dimensions) {
+        if(candidate == NULL || candidate->dimensions != v->dimensions) {
             continue; 
         }
-        cos_sim = get_cosine_similarity(v->dimensions, v->components, candidate->components);
-        if (!pq_enqueue(pq, cos_sim, candidate)) {
-            pq_destroy(pq);
-            return 0;
+        
+        candidate_cos_sim = get_cosine_similarity(v->dimensions, v->components, candidate->components);
+        
+        if(pq_get_count(pq) < pq_get_capacity(pq)){
+            if (!pq_enqueue(pq, candidate_cos_sim, candidate)) {
+                pq_destroy(pq);
+                return 0;
+            }
+        } else {
+            if(!pq_peek(pq, &worst_saved_el)){
+                pq_destroy(pq);
+                return 0;
+            }
+            
+            if(candidate_cos_sim > worst_saved_el.priority){
+                if (!(pq_dequeue(pq, &worst_saved_el) && pq_enqueue(pq, candidate_cos_sim, candidate))){
+                    pq_destroy(pq);
+                    return 0;
+                }
+            }
         }
     }
     
-    int retrieved = 0;
+    int retrieved = pq_get_count(pq);
     pq_element out;
-    for(int i = 0; i < k && pq_get_count(pq) > 0; i++){
+    
+    for(int i = retrieved - 1; i >= 0; i--){
         if(pq_dequeue(pq, &out)) {
             out_vector_list[i] = (sevdb_vector*)out.content;
-            retrieved++;
         }
     }
     
