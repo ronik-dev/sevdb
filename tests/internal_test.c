@@ -127,3 +127,16 @@ Test(database, should_create_push_and_perform_cosine_similarity_search) {
     sevdb_vector_destroy(vector_to_compare);
     sevdb_db_destroy(db);
 }
+
+
+Test(database, should_serialize_and_deserialize) {
+    sevdb_database* db = sevdb_db_create(42); 
+    const char *path = "./test_db.bin"; 
+
+    cr_assert(sevdb_db_serialize(db, path), "Failed to write magic bytes");
+    cr_assert(sevdb_db_deserialize(db, path), "Failed to read magic bytes");
+
+    remove(path); 
+    
+    sevdb_db_destroy(db); 
+}

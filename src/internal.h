@@ -41,8 +41,13 @@ int sevdb_database_get_capacity(sevdb_database *db);
 int sevdb_database_get_count(sevdb_database *db);
 
 // database operations
+  
 sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);
 sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, int id);
 void sevdb_db_remove_vector_by_id(sevdb_database *db, int id);
-
 int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list);
+
+// database data persistence
+  
+bool sevdb_db_serialize(sevdb_database *db, const char *path);
+bool sevdb_db_deserialize(sevdb_database *db, const char *path);

@@ -3,6 +3,7 @@
 #include "pqueue.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 struct sevdb_vector{
     int id;                 //unique identifier 
@@ -180,4 +181,41 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
     
     pq_destroy(pq);
     return retrieved; 
+}
+
+
+
+
+const char magic[] = "SEVDB001"; 
+
+bool sevdb_db_serialize(sevdb_database *db, const char *path) {
+    FILE* fp = fopen(path, "wb"); 
+    if (fp == NULL) return false; 
+    
+    if (fwrite(magic, 1, 8, fp) != 8) {
+        fclose(fp);
+        return false; // FAILED TO WRITE FULL HEADER
+    }
+
+    fclose(fp);
+    return true;
+}
+
+bool sevdb_db_deserialize(sevdb_database *db, const char *path) {
+    FILE* fp = fopen(path, "rb"); 
+    if (fp == NULL) return false; 
+    
+    char buffer[8];
+    if (fread(buffer, 1, 8, fp) != 8) {
+        fclose(fp);
+        return false; // FILE IS TOO SMALL OR READ FAILED
+    }
+    
+    if (memcmp(magic, buffer, 8) != 0) {
+        fclose(fp);
+        return false; // READ WRONG FILE HEADER
+    }
+
+    fclose(fp);
+    return true;
 }
