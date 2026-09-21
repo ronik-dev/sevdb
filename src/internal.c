@@ -4,16 +4,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdint.h>
+
+#define MAGIC "SEVDB"
+#define MAGIC_SIZE 5
+const uint32_t version = 1;
+
 
 struct sevdb_vector{
-    int id;                 //unique identifier 
-    int dimensions;         //number of dimensions (components) of the vector
+    uint32_t id;            //unique identifier 
+    uint32_t dimensions;    //number of dimensions (components) of the vector
     float components[];     //array of components
 };
 
 struct sevdb_database{
-    int capacity;           //how many vector can the db store
-    int count;              //how many vector are currently stored
+    uint32_t capacity;      //how many vector can the db store
+    uint32_t count;         //how many vector are currently stored
     sevdb_vector **vectors; //array of vectors (pointer to the first)
 };
 
@@ -23,6 +29,7 @@ struct sevdb_database{
 //----------
   
 sevdb_vector* sevdb_vector_create(int id, int dimensions ,const float* components){
+    if(dimensions < 0 || components == NULL) return NULL;
     size_t components_size = sizeof(float)*dimensions;
     size_t total_size = sizeof(sevdb_vector) + components_size;
     sevdb_vector *v = malloc(total_size);
@@ -183,39 +190,90 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
     return retrieved; 
 }
 
+//---------------
+//--PERSISTENCE--
+//---------------
 
+const bool sevdb_vector_serialize(FILE* fp,sevdb_vector* v){
+    if (v == NULL || fp == NULL) return false;
+    // serialize id
+    if (fwrite(&v->id, sizeof(v->id), 1, fp) != 1){
+        return false;
+    }
 
+    // serialize dimensions
+    if (fwrite(&v->dimensions, sizeof(v->dimensions), 1, fp) != 1){
+        return false;
+    }
 
-const char magic[] = "SEVDB001"; 
+    // serialize components 
+    if (fwrite(v->components, sizeof(*v->components), v->dimensions, fp) != v->dimensions){
+        return false;
+    }
+
+    return true;
+}
+
 
 bool sevdb_db_serialize(sevdb_database *db, const char *path) {
+    if (db == NULL) return false;
     FILE* fp = fopen(path, "wb"); 
     if (fp == NULL) return false; 
     
-    if (fwrite(magic, 1, 8, fp) != 8) {
+    // write file header to sign start of file
+    if (fwrite(MAGIC, MAGIC_SIZE, 1, fp) != 1) {
         fclose(fp);
         return false; // FAILED TO WRITE FULL HEADER
+    }
+
+    // write version
+    if (fwrite(&version, sizeof(version), 1, fp) != 1) {
+        fclose(fp);
+        return false; // FAILED TO WRITE VERSION
+    }
+
+    // serialize db capacity
+    if (fwrite(&db->capacity, sizeof(db->capacity), 1, fp) != 1){
+        fclose(fp);
+        return false; // FAILED TO WRITE CAPACITY
+    }
+    //serialize db count
+    if (fwrite(&db->count, sizeof(db->count), 1, fp) != 1){
+        fclose(fp);
+        return false; // FAILED TO WRITE CAPACITY
+    }
+
+    // TODO: serialize vectors
+    for (int i = 0; i< db->capacity; i++){
+        if(db->vectors[i] == NULL) continue;
+        if (!sevdb_vector_serialize(fp, db->vectors[i])){
+            fclose(fp);
+            return false;
+        }
     }
 
     fclose(fp);
     return true;
 }
 
-bool sevdb_db_deserialize(sevdb_database *db, const char *path) {
+sevdb_database* sevdb_db_deserialize(const char *path) {
     FILE* fp = fopen(path, "rb"); 
-    if (fp == NULL) return false; 
+    if (fp == NULL) return NULL; 
+    sevdb_database* new_db = NULL;
     
-    char buffer[8];
-    if (fread(buffer, 1, 8, fp) != 8) {
+    char buffer[MAGIC_SIZE];
+    if (fread(buffer, 1, MAGIC_SIZE, fp) != MAGIC_SIZE) {
         fclose(fp);
-        return false; // FILE IS TOO SMALL OR READ FAILED
+        return NULL; // FILE IS TOO SMALL OR READ FAILED
     }
     
-    if (memcmp(magic, buffer, 8) != 0) {
+    if (memcmp(MAGIC, buffer, MAGIC_SIZE) != 0) {
         fclose(fp);
-        return false; // READ WRONG FILE HEADER
+        return NULL; // READ WRONG FILE HEADER
     }
 
+    // deserialize the whole db
+    // ...
     fclose(fp);
-    return true;
+    return new_db;
 }
