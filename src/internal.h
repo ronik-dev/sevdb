@@ -1,5 +1,6 @@
 #pragma once
 #include <stdbool.h>
+#include <stdint.h>
 
 /**
  * @struct sevdb_vector
@@ -32,7 +33,7 @@ typedef struct sevdb_database sevdb_database;
  *                   The data is copied internally, so the caller can safely free their own array after this call.
  * @return A pointer to the newly allocated vector, or NULL if allocation fails or invalid parameters are provided.
  */
-sevdb_vector* sevdb_vector_create(int id, int dimensions, const float *components);
+sevdb_vector* sevdb_vector_create(uint32_t id, uint32_t dimensions, const float *components);
 
 /**
  * @brief Safely frees the memory associated with a vector.
@@ -42,8 +43,8 @@ sevdb_vector* sevdb_vector_create(int id, int dimensions, const float *component
 void sevdb_vector_destroy(sevdb_vector *v);
 
 // --- Vector Getters ---
-int sevdb_vector_get_id(sevdb_vector *v);
-int sevdb_vector_get_dimensions(sevdb_vector *v);
+uint32_t sevdb_vector_get_id(sevdb_vector *v);
+uint32_t sevdb_vector_get_dimensions(sevdb_vector *v);
 float* sevdb_vector_get_components(sevdb_vector *v);
 
 
@@ -58,7 +59,7 @@ float* sevdb_vector_get_components(sevdb_vector *v);
  *
  * @return A pointer to the new database, or NULL if allocation fails.
  */
-sevdb_database* sevdb_db_create(int capacity);
+sevdb_database* sevdb_db_create(uint32_t capacity);
 
 /**
  * @brief Destroys the database and frees ALL vectors stored within it.
@@ -68,8 +69,8 @@ sevdb_database* sevdb_db_create(int capacity);
 void sevdb_db_destroy(sevdb_database *db);
  
 // --- Database Getters ---
-int sevdb_database_get_capacity(sevdb_database *db);
-int sevdb_database_get_count(sevdb_database *db);
+uint32_t sevdb_database_get_capacity(sevdb_database *db);
+uint32_t sevdb_database_get_count(sevdb_database *db);
 
 /**
  * @brief Inserts a vector into the database.
@@ -97,7 +98,7 @@ sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, int id);
  * @param db Pointer to the database instance.
  * @param id The identifier of the vector to remove.
  */
-void sevdb_db_remove_vector_by_id(sevdb_database *db, int id);
+void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
 
 /**
  * @brief Performs a Top-K similarity search using Cosine Similarity.

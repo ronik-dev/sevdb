@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <stdint.h>
 
 #define MAGIC "SEVDB"
 #define MAGIC_SIZE 5
@@ -27,8 +26,8 @@ struct sevdb_database{
 //----------
 //--VECTOR--
 //----------
-  
-sevdb_vector* sevdb_vector_create(int id, int dimensions ,const float* components){
+
+sevdb_vector* sevdb_vector_create(uint32_t id, uint32_t dimensions ,const float* components){
     if(dimensions < 0 || components == NULL) return NULL;
     size_t components_size = sizeof(float)*dimensions;
     size_t total_size = sizeof(sevdb_vector) + components_size;
@@ -44,11 +43,11 @@ void sevdb_vector_destroy(sevdb_vector *v){
     if(v != NULL) free(v);
 }
 
-int sevdb_vector_get_id(sevdb_vector *v){
+uint32_t sevdb_vector_get_id(sevdb_vector *v){
     return v->id;
 }
 
-int sevdb_vector_get_dimensions(sevdb_vector *v){
+uint32_t sevdb_vector_get_dimensions(sevdb_vector *v){
     return v->dimensions;
 }
 
@@ -62,7 +61,7 @@ float* sevdb_vector_get_components(sevdb_vector *v){
 //--DATABASE--
 //------------
 
-sevdb_database* sevdb_db_create(int capacity){
+sevdb_database* sevdb_db_create(uint32_t capacity){
     sevdb_database *db = malloc(sizeof(sevdb_database));
     if(db == NULL) return NULL;
     db->capacity = capacity;
@@ -88,14 +87,14 @@ void sevdb_db_destroy(sevdb_database *db){
     free(db);
 }
 
-int sevdb_database_get_capacity(sevdb_database *db){
+uint32_t sevdb_database_get_capacity(sevdb_database *db){
     return db->capacity;
 }
 
-int sevdb_database_get_count(sevdb_database *db){
+uint32_t sevdb_database_get_count(sevdb_database *db){
     return db->count;
 }
-  
+
 sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
     if(db == NULL || v == NULL) return NULL;
     if(db->count >= db->capacity) return NULL;
@@ -122,7 +121,7 @@ sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, int id){
     return NULL;
 }
 
-void sevdb_db_remove_vector_by_id(sevdb_database *db, int id){
+void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
     if(db == NULL || db->count == 0) return;
     sevdb_vector * v = NULL;
     for(int i = 0; i < db->capacity; i++){
@@ -141,22 +140,22 @@ static bool is_min_heap(float a, float b) { return a < b; }
 
 int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list){
     if(db == NULL || db->count == 0 || v == NULL || out_vector_list == NULL) return 0;
-    
+
     pqueue* pq = pq_create(k, is_min_heap);
     if(pq == NULL) return 0;
 
     sevdb_vector* candidate;
     pq_element worst_saved_el;
     float candidate_cos_sim;
-    
+
     for(int i = 0; i < db->capacity; i++){
         candidate = db->vectors[i];
         if(candidate == NULL || candidate->dimensions != v->dimensions) {
             continue; 
         }
-        
+
         candidate_cos_sim = get_cosine_similarity(v->dimensions, v->components, candidate->components);
-        
+
         if(pq_get_count(pq) < pq_get_capacity(pq)){
             if (!pq_enqueue(pq, candidate_cos_sim, candidate)) {
                 pq_destroy(pq);
@@ -167,7 +166,7 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
                 pq_destroy(pq);
                 return 0;
             }
-            
+
             if(candidate_cos_sim > worst_saved_el.priority){
                 if (!(pq_dequeue(pq, &worst_saved_el) && pq_enqueue(pq, candidate_cos_sim, candidate))){
                     pq_destroy(pq);
@@ -176,16 +175,16 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
             }
         }
     }
-    
+
     int retrieved = pq_get_count(pq);
     pq_element out;
-    
+
     for(int i = retrieved - 1; i >= 0; i--){
         if(pq_dequeue(pq, &out)) {
             out_vector_list[i] = (sevdb_vector*)out.content;
         }
     }
-    
+
     pq_destroy(pq);
     return retrieved; 
 }
@@ -219,7 +218,7 @@ bool sevdb_db_serialize(sevdb_database *db, const char *path) {
     if (db == NULL) return false;
     FILE* fp = fopen(path, "wb"); 
     if (fp == NULL) return false; 
-    
+
     // write file header to sign start of file
     if (fwrite(MAGIC, MAGIC_SIZE, 1, fp) != 1) {
         fclose(fp);
@@ -237,13 +236,24 @@ bool sevdb_db_serialize(sevdb_database *db, const char *path) {
         fclose(fp);
         return false; // FAILED TO WRITE CAPACITY
     }
-    //serialize db count
+    // serialize db count
     if (fwrite(&db->count, sizeof(db->count), 1, fp) != 1){
         fclose(fp);
         return false; // FAILED TO WRITE CAPACITY
     }
+    uint32_t serialized_count = 0;
 
-    // TODO: serialize vectors
+    for (uint32_t i = 0; i < db->capacity; i++) {
+        if (db->vectors[i] != NULL) {
+            serialized_count++;
+        }
+    }
+    if (serialized_count != db->count){
+        fclose(fp);
+        return false;
+    }
+
+    // serialize vectors
     for (int i = 0; i< db->capacity; i++){
         if(db->vectors[i] == NULL) continue;
         if (!sevdb_vector_serialize(fp, db->vectors[i])){
@@ -252,28 +262,123 @@ bool sevdb_db_serialize(sevdb_database *db, const char *path) {
         }
     }
 
+
     fclose(fp);
     return true;
 }
 
-sevdb_database* sevdb_db_deserialize(const char *path) {
-    FILE* fp = fopen(path, "rb"); 
-    if (fp == NULL) return NULL; 
-    sevdb_database* new_db = NULL;
-    
-    char buffer[MAGIC_SIZE];
-    if (fread(buffer, 1, MAGIC_SIZE, fp) != MAGIC_SIZE) {
-        fclose(fp);
-        return NULL; // FILE IS TOO SMALL OR READ FAILED
-    }
-    
-    if (memcmp(MAGIC, buffer, MAGIC_SIZE) != 0) {
-        fclose(fp);
-        return NULL; // READ WRONG FILE HEADER
+/*
+ * SEVDB file format v1
+ *
+ * Header:
+ *   char[5]   magic = "SEVDB"
+ *   uint32_t  version = 1
+ *   uint32_t  capacity
+ *   uint32_t  count
+ *
+ * Vector:
+ *   uint32_t  id
+ *   uint32_t  dimensions
+ *   float     components[dimensions]
+ */
+sevdb_database* sevdb_db_deserialize_v1(FILE* fp) {
+    if (fp == NULL) return NULL;
+
+    uint32_t capacity;
+    if (fread(&capacity, sizeof(capacity), 1, fp) != 1)
+        return NULL;
+
+    uint32_t count;
+    if (fread(&count, sizeof(count), 1, fp) != 1)
+        return NULL;
+    if (count > capacity) return NULL;
+
+    sevdb_database *new_db = sevdb_db_create(capacity);
+    if (new_db == NULL) return NULL;
+
+    for (uint32_t v = 0; v < count; v++) {
+        uint32_t v_id;
+        if (fread(&v_id, sizeof(v_id), 1, fp) != 1) {
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
+
+        uint32_t v_dimensions;
+        if (fread(&v_dimensions, sizeof(v_dimensions), 1, fp) != 1) {
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
+        if (v_dimensions == 0) {
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
+
+        float v_components[v_dimensions];
+        if (fread(
+                v_components,
+                sizeof(float),
+                v_dimensions,
+                fp
+            ) != v_dimensions) {
+
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
+
+        sevdb_vector *new_vector = sevdb_vector_create(v_id, v_dimensions, v_components);
+        if (new_vector == NULL) {
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
+        if (sevdb_db_push_vector(new_db, new_vector) == NULL) {
+            sevdb_vector_destroy(new_vector);
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
     }
 
-    // deserialize the whole db
-    // ...
+    return new_db;
+}
+
+sevdb_database* sevdb_db_deserialize(const char *path) {
+    FILE* fp = fopen(path, "rb");
+
+    if (fp == NULL) {
+        return NULL;
+    }
+
+    sevdb_database* new_db = NULL;
+
+    char magic_buffer[MAGIC_SIZE];
+
+    if (fread(magic_buffer, MAGIC_SIZE, 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    if (memcmp(MAGIC, magic_buffer, MAGIC_SIZE) != 0) {
+        fclose(fp);
+        return NULL;
+    }
+
+    uint32_t file_version;
+
+    if (fread(&file_version, sizeof(file_version), 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+
+    switch (file_version) {
+        case 1:
+            new_db = sevdb_db_deserialize_v1(fp);
+            break;
+
+        default:
+            fclose(fp);
+            return NULL;
+    }
+
     fclose(fp);
+
     return new_db;
 }
