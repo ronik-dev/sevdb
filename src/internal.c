@@ -4,11 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
+#include <unistd.h>
+#include <limits.h>
 
 #define MAGIC "SEVDB"
 #define MAGIC_SIZE 5
+#define SEVDB_MAX_DIMENSIONS 4096
 const uint32_t version = 1;
-
 
 struct sevdb_vector{
     uint32_t id;            //unique identifier 
@@ -193,7 +196,7 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
 //--PERSISTENCE--
 //---------------
 
-const bool sevdb_vector_serialize(FILE* fp,sevdb_vector* v){
+const bool sevdb_vector_serialize(FILE* fp, sevdb_vector* v){
     if (v == NULL || fp == NULL) return false;
     // serialize id
     if (fwrite(&v->id, sizeof(v->id), 1, fp) != 1){
@@ -215,56 +218,54 @@ const bool sevdb_vector_serialize(FILE* fp,sevdb_vector* v){
 
 
 bool sevdb_db_serialize(sevdb_database *db, const char *path) {
-    if (db == NULL) return false;
-    FILE* fp = fopen(path, "wb"); 
-    if (fp == NULL) return false; 
+    if (db == NULL || path == NULL) return false;
 
-    // write file header to sign start of file
-    if (fwrite(MAGIC, MAGIC_SIZE, 1, fp) != 1) {
-        fclose(fp);
-        return false; // FAILED TO WRITE FULL HEADER
-    }
-
-    // write version
-    if (fwrite(&version, sizeof(version), 1, fp) != 1) {
-        fclose(fp);
-        return false; // FAILED TO WRITE VERSION
-    }
-
-    // serialize db capacity
-    if (fwrite(&db->capacity, sizeof(db->capacity), 1, fp) != 1){
-        fclose(fp);
-        return false; // FAILED TO WRITE CAPACITY
-    }
-    // serialize db count
-    if (fwrite(&db->count, sizeof(db->count), 1, fp) != 1){
-        fclose(fp);
-        return false; // FAILED TO WRITE CAPACITY
-    }
     uint32_t serialized_count = 0;
-
     for (uint32_t i = 0; i < db->capacity; i++) {
-        if (db->vectors[i] != NULL) {
-            serialized_count++;
-        }
+        if (db->vectors[i] != NULL) serialized_count++;
     }
-    if (serialized_count != db->count){
-        fclose(fp);
+    if (serialized_count != db->count) return false;
+
+    char temp_path[PATH_MAX];
+    int n = snprintf(temp_path, sizeof(temp_path), "%s.XXXXXX", path);
+    if (n < 0 || (size_t)n >= sizeof(temp_path)) return false;
+
+    int fd = mkstemp(temp_path);
+    if (fd == -1) return false;
+
+    FILE* fp_temp = fdopen(fd, "wb");
+    if (fp_temp == NULL) {
+        close(fd);
+        remove(temp_path);
         return false;
     }
 
-    // serialize vectors
-    for (int i = 0; i< db->capacity; i++){
-        if(db->vectors[i] == NULL) continue;
-        if (!sevdb_vector_serialize(fp, db->vectors[i])){
-            fclose(fp);
-            return false;
-        }
+    if (fwrite(MAGIC, MAGIC_SIZE, 1, fp_temp) != 1) goto fail;
+    if (fwrite(&version, sizeof(version), 1, fp_temp) != 1) goto fail;
+    if (fwrite(&db->capacity, sizeof(db->capacity), 1, fp_temp) != 1) goto fail;
+    if (fwrite(&db->count, sizeof(db->count), 1, fp_temp) != 1) goto fail;
+
+    for (uint32_t i = 0; i < db->capacity; i++) {
+        if (db->vectors[i] == NULL) continue;
+        if (!sevdb_vector_serialize(fp_temp, db->vectors[i])) goto fail;
     }
 
+    if (fclose(fp_temp) != 0) {
+        remove(temp_path);
+        return false;
+    }
 
-    fclose(fp);
+    if (rename(temp_path, path) != 0) {
+        remove(temp_path);
+        return false;
+    }
+
     return true;
+
+fail:
+    fclose(fp_temp);
+    remove(temp_path);
+    return false;
 }
 
 /*
@@ -308,24 +309,25 @@ sevdb_database* sevdb_db_deserialize_v1(FILE* fp) {
             sevdb_db_destroy(new_db);
             return NULL;
         }
-        if (v_dimensions == 0) {
+        if (v_dimensions == 0 || v_dimensions > SEVDB_MAX_DIMENSIONS) {
             sevdb_db_destroy(new_db);
             return NULL;
         }
 
-        float v_components[v_dimensions];
-        if (fread(
-                v_components,
-                sizeof(float),
-                v_dimensions,
-                fp
-            ) != v_dimensions) {
+        float *v_components = malloc(sizeof(float) * v_dimensions);
+        if (v_components == NULL) {
+            sevdb_db_destroy(new_db);
+            return NULL;
+        }
 
+        if (fread(v_components, sizeof(float), v_dimensions, fp) != v_dimensions) {
+            free(v_components);
             sevdb_db_destroy(new_db);
             return NULL;
         }
 
         sevdb_vector *new_vector = sevdb_vector_create(v_id, v_dimensions, v_components);
+        free(v_components); // sevdb_vector_create memcpy's the components, safe to free now
         if (new_vector == NULL) {
             sevdb_db_destroy(new_db);
             return NULL;
