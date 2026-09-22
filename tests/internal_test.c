@@ -1,6 +1,6 @@
 #include <criterion/criterion.h>
 #include <stdio.h>
-#include "../src/internal.h"
+#include "sevdb/sevdb.h"
 #include "../src/distance.h"
 
 Test(vector, should_create_and_read) {

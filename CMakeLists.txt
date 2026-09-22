@@ -9,12 +9,12 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 #-----------------
 
 add_library(sevdb STATIC
-    src/internal.c
+    src/sevdb.c
     src/distance.c
     src/pqueue.c
     src/checksum.c
+    src/persistence.c
 )
-
 target_include_directories(sevdb PUBLIC include)
 target_include_directories(sevdb PRIVATE src)
 # math standard library

@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include "../src/internal.h"
+#include "sevdb/sevdb.h"
 #include "../src/distance.h" 
 
 int main() {
