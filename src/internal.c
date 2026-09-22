@@ -1,6 +1,7 @@
 #include "internal.h"
 #include "distance.h"
 #include "pqueue.h"
+#include "checksum.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -233,7 +234,7 @@ bool sevdb_db_serialize(sevdb_database *db, const char *path) {
     int fd = mkstemp(temp_path);
     if (fd == -1) return false;
 
-    FILE* fp_temp = fdopen(fd, "wb");
+    FILE* fp_temp = fdopen(fd, "wb+");
     if (fp_temp == NULL) {
         close(fd);
         remove(temp_path);
@@ -249,6 +250,23 @@ bool sevdb_db_serialize(sevdb_database *db, const char *path) {
         if (db->vectors[i] == NULL) continue;
         if (!sevdb_vector_serialize(fp_temp, db->vectors[i])) goto fail;
     }
+
+    if (fflush(fp_temp) != 0) goto fail;
+    rewind(fp_temp); 
+
+    uint32_t calculated_crc = 0;
+    uint8_t chunk[4096];
+    size_t bytes_read;
+    
+    while ((bytes_read = fread(chunk, 1, sizeof(chunk), fp_temp)) > 0) {
+        calculated_crc = crc32(calculated_crc, chunk, bytes_read);
+    }
+    
+    if (ferror(fp_temp)) goto fail;
+
+    clearerr(fp_temp);
+
+    if (fwrite(&calculated_crc, sizeof(calculated_crc), 1, fp_temp) != 1) goto fail;
 
     if (fclose(fp_temp) != 0) {
         remove(temp_path);
@@ -369,6 +387,48 @@ sevdb_database* sevdb_db_deserialize(const char *path) {
         fclose(fp);
         return NULL;
     }
+    
+    long current_pos = ftell(fp);
+    
+    if (fseek(fp, -((long)sizeof(uint32_t)), SEEK_END) != 0) {
+        fclose(fp);
+        return NULL;
+    }
+    
+    uint32_t saved_crc;
+    if (fread(&saved_crc, sizeof(saved_crc), 1, fp) != 1) {
+        fclose(fp);
+        return NULL;
+    }
+    
+    long data_length = ftell(fp) - sizeof(uint32_t);
+    
+    rewind(fp);
+    uint32_t calculated_crc = 0;
+    uint8_t chunk[4096];
+    long bytes_remaining = data_length;
+    
+    while (bytes_remaining > 0) {
+        size_t to_read = (bytes_remaining < sizeof(chunk)) ? bytes_remaining : sizeof(chunk);
+        size_t bytes_read = fread(chunk, 1, to_read, fp);
+        
+        if (bytes_read != to_read) {
+            fclose(fp);
+            return NULL;
+        }
+        
+        calculated_crc = crc32(calculated_crc, chunk, bytes_read);
+        bytes_remaining -= bytes_read;
+    }
+    
+    // 5. Compare the checksums
+    if (calculated_crc != saved_crc) {
+        fclose(fp);
+        return NULL; // CORRUPTED FILE
+    }
+    
+    // 6. Restore the file pointer to where it was so deserialization can continue normally
+    fseek(fp, current_pos, SEEK_SET);
 
     switch (file_version) {
         case 1:

@@ -12,6 +12,7 @@ add_library(sevdb STATIC
     src/internal.c
     src/distance.c
     src/pqueue.c
+    src/checksum.c
 )
 
 target_include_directories(sevdb PUBLIC include)

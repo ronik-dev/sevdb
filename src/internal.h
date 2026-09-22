@@ -120,15 +120,18 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
  * SEVDB file format v1
  *
  * Header:
- *   char[5]   magic = "SEVDB"
- *   uint32_t  version = 1
- *   uint32_t  capacity
- *   uint32_t  count
+ *   char[5]    magic = "SEVDB"
+ *   uint32_t   version = 1
+ *   uint32_t   capacity
+ *   uint32_t   count
  *
  * Vector:
- *   uint32_t  id
- *   uint32_t  dimensions
- *   float     components[dimensions]
+ *   uint32_t   id
+ *   uint32_t   dimensions
+ *   float      components[dimensions]
+ *
+ * Footer:
+ *   uint32_t   crc32_checksum 
  */
 
 /**
