@@ -15,7 +15,7 @@
 //----------
 
 sevdb_vector* sevdb_vector_create(uint32_t id, uint32_t dimensions ,const float* components){
-    if(dimensions < 0 || components == NULL) return NULL;
+    if(dimensions < 0 || components == NULL || dimensions > SEVDB_MAX_VECTOR_DIMENSIONS) return NULL;
     size_t components_size = sizeof(float)*dimensions;
     size_t total_size = sizeof(sevdb_vector) + components_size;
     sevdb_vector *v = malloc(total_size);
@@ -72,6 +72,22 @@ void sevdb_db_destroy(sevdb_database *db){
         free(db->vectors);
     }
     free(db);
+}
+
+
+bool sevdb_database_increase_capacity(sevdb_database *db, uint32_t increase){
+    if (increase == 0) return false;
+    uint64_t new_capacity = db->capacity + increase;
+    if (new_capacity > UINT32_MAX) return false;
+
+    size_t new_size = new_capacity * sizeof(sevdb_vector*);
+    sevdb_vector** temp = realloc(db->vectors, new_size);
+    if (temp == NULL) return false;
+    memset(temp + db->capacity, 0,new_capacity - db->capacity);
+
+    db->capacity = (uint32_t)new_capacity;
+    db->vectors = temp; 
+    return true;
 }
 
 uint32_t sevdb_database_get_capacity(sevdb_database *db){

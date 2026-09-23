@@ -58,6 +58,48 @@ Test(database, should_create_push_remove_and_read) {
     sevdb_db_destroy(db);
 }
 
+Test(database, should_increase_capacity) {
+    // create database with small capacity
+    sevdb_database *db = sevdb_db_create(2);
+
+    cr_assert_not_null(db, "Database allocation failed");
+    cr_assert_eq(sevdb_database_get_capacity(db), 2);
+
+    // add a vector before increasing
+    float input_components[2] = {4.2f, 5.2f};
+    sevdb_vector *v1 = sevdb_vector_create(42, 2, input_components);
+
+    sevdb_vector *result = sevdb_db_push_vector(db, v1);
+    cr_assert_eq(result, v1);
+
+    // increase capacity
+    bool increased = sevdb_database_increase_capacity(db, 3);
+
+    cr_assert(increased, "Failed to increase database capacity");
+    cr_assert_eq(sevdb_database_get_capacity(db), 5);
+
+    // make sure the existing vector is still accessible
+    sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
+
+    cr_assert_eq(search, v1, "Vector was lost after increasing capacity");
+
+    // make sure we can push into the newly allocated space
+    float input_components2[2] = {6.2f, 7.2f};
+    sevdb_vector *v2 = sevdb_vector_create(43, 2, input_components2);
+
+    result = sevdb_db_push_vector(db, v2);
+
+    cr_assert_eq(result, v2);
+    cr_assert_eq(sevdb_database_get_count(db), 2);
+
+    // verify second vector
+    search = sevdb_db_get_vector_by_id(db, 43);
+    cr_assert_eq(search, v2, "Could not retrieve vector added after capacity increase");
+
+    // clean
+    sevdb_db_destroy(db);
+}
+
 
 Test(database, should_create_push_and_perform_cosine_similarity_search) {
     int vector_number = 10;

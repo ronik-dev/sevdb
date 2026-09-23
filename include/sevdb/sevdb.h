@@ -55,6 +55,9 @@ void sevdb_db_destroy(sevdb_database *db);
 uint32_t sevdb_database_get_capacity(sevdb_database *db);
 uint32_t sevdb_database_get_count(sevdb_database *db);
 
+// --- Database Setters 
+bool sevdb_database_increase_capacity(sevdb_database *db, uint32_t increase);
+
 /**
  * @brief Inserts a vector into the database.
  * 

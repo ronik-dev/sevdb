@@ -10,7 +10,6 @@
 
 #define MAGIC "SEVDB"
 #define MAGIC_SIZE 5
-#define SEVDB_MAX_DIMENSIONS 4096
 const uint32_t version = 1;
 
 const bool sevdb_vector_serialize(FILE* fp, sevdb_vector* v){
@@ -143,7 +142,7 @@ sevdb_database* sevdb_db_deserialize_v1(FILE* fp) {
             sevdb_db_destroy(new_db);
             return NULL;
         }
-        if (v_dimensions == 0 || v_dimensions > SEVDB_MAX_DIMENSIONS) {
+        if (v_dimensions == 0 || v_dimensions > SEVDB_MAX_VECTOR_DIMENSIONS) {
             sevdb_db_destroy(new_db);
             return NULL;
         }
@@ -237,13 +236,12 @@ sevdb_database* sevdb_db_deserialize(const char *path) {
         bytes_remaining -= bytes_read;
     }
     
-    // 5. Compare the checksums
     if (calculated_crc != saved_crc) {
         fclose(fp);
         return NULL; // CORRUPTED FILE
     }
     
-    // 6. Restore the file pointer to where it was so deserialization can continue normally
+    // . Restore the file pointer to where it was so deserialization can continue normally
     fseek(fp, current_pos, SEEK_SET);
 
     switch (file_version) {
