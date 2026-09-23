@@ -75,7 +75,7 @@ void sevdb_db_destroy(sevdb_database *db){
 }
 
 
-bool sevdb_database_increase_capacity(sevdb_database *db, uint32_t increase){
+bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase){
     if (increase == 0) return false;
     uint64_t new_capacity = db->capacity + increase;
     if (new_capacity > UINT32_MAX) return false;
@@ -90,11 +90,11 @@ bool sevdb_database_increase_capacity(sevdb_database *db, uint32_t increase){
     return true;
 }
 
-uint32_t sevdb_database_get_capacity(sevdb_database *db){
+uint32_t sevdb_db_get_capacity(sevdb_database *db){
     return db->capacity;
 }
 
-uint32_t sevdb_database_get_count(sevdb_database *db){
+uint32_t sevdb_db_get_count(sevdb_database *db){
     return db->count;
 }
 

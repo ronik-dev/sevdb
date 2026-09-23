@@ -44,7 +44,7 @@ Test(database, should_create_push_remove_and_read) {
     float input_components[2] = {4.2f, 5.2f};
     sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
     sevdb_vector *result = sevdb_db_push_vector(db, v);
-    int old_number_of_vectors = sevdb_database_get_count(db);
+    int old_number_of_vectors = sevdb_db_get_count(db);
 
     //remove
     sevdb_db_remove_vector_by_id(db, 42);
@@ -52,7 +52,7 @@ Test(database, should_create_push_remove_and_read) {
     //read
     sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
     cr_assert(search == NULL, "Remove by id did not occour, vector is still present");
-    cr_assert(old_number_of_vectors -1  == sevdb_database_get_count(db), "DB vector count was not succesfully updated");
+    cr_assert(old_number_of_vectors -1  == sevdb_db_get_count(db), "DB vector count was not succesfully updated");
 
     //clean
     sevdb_db_destroy(db);
@@ -63,7 +63,7 @@ Test(database, should_increase_capacity) {
     sevdb_database *db = sevdb_db_create(2);
 
     cr_assert_not_null(db, "Database allocation failed");
-    cr_assert_eq(sevdb_database_get_capacity(db), 2);
+    cr_assert_eq(sevdb_db_get_capacity(db), 2);
 
     // add a vector before increasing
     float input_components[2] = {4.2f, 5.2f};
@@ -73,10 +73,10 @@ Test(database, should_increase_capacity) {
     cr_assert_eq(result, v1);
 
     // increase capacity
-    bool increased = sevdb_database_increase_capacity(db, 3);
+    bool increased = sevdb_db_increase_capacity(db, 3);
 
     cr_assert(increased, "Failed to increase database capacity");
-    cr_assert_eq(sevdb_database_get_capacity(db), 5);
+    cr_assert_eq(sevdb_db_get_capacity(db), 5);
 
     // make sure the existing vector is still accessible
     sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
@@ -90,7 +90,7 @@ Test(database, should_increase_capacity) {
     result = sevdb_db_push_vector(db, v2);
 
     cr_assert_eq(result, v2);
-    cr_assert_eq(sevdb_database_get_count(db), 2);
+    cr_assert_eq(sevdb_db_get_count(db), 2);
 
     // verify second vector
     search = sevdb_db_get_vector_by_id(db, 43);
@@ -193,7 +193,7 @@ Test(database, should_serialize_and_deserialize_with_vectors) {
     cr_assert_not_null(sevdb_db_push_vector(db, v2));
     cr_assert_not_null(sevdb_db_push_vector(db, v3));
 
-    cr_assert_eq(sevdb_database_get_count(db), 3);
+    cr_assert_eq(sevdb_db_get_count(db), 3);
 
     /* Serialize. */
     cr_assert(
@@ -211,13 +211,13 @@ Test(database, should_serialize_and_deserialize_with_vectors) {
 
     /* Database metadata. */
     cr_assert_eq(
-        sevdb_database_get_capacity(loaded_db),
+        sevdb_db_get_capacity(loaded_db),
         42,
         "Deserialized database has wrong capacity"
     );
 
     cr_assert_eq(
-        sevdb_database_get_count(loaded_db),
+        sevdb_db_get_count(loaded_db),
         3,
         "Deserialized database has wrong vector count"
     );
@@ -378,7 +378,7 @@ Test(database, should_preserve_vector_count_after_deserialization) {
         cr_assert_not_null(sevdb_db_push_vector(db, v));
     }
 
-    cr_assert_eq(sevdb_database_get_count(db), 20);
+    cr_assert_eq(sevdb_db_get_count(db), 20);
 
     cr_assert(sevdb_db_serialize(db, path));
 
@@ -388,12 +388,12 @@ Test(database, should_preserve_vector_count_after_deserialization) {
     cr_assert_not_null(loaded_db);
 
     cr_assert_eq(
-        sevdb_database_get_capacity(loaded_db),
+        sevdb_db_get_capacity(loaded_db),
         100
     );
 
     cr_assert_eq(
-        sevdb_database_get_count(loaded_db),
+        sevdb_db_get_count(loaded_db),
         20
     );
 
@@ -446,7 +446,7 @@ Test(database, should_serialize_and_deserialize_empty_database) {
     sevdb_database *db = sevdb_db_create(42);
 
     cr_assert_not_null(db);
-    cr_assert_eq(sevdb_database_get_count(db), 0);
+    cr_assert_eq(sevdb_db_get_count(db), 0);
 
     cr_assert(
         sevdb_db_serialize(db, path),
@@ -462,12 +462,12 @@ Test(database, should_serialize_and_deserialize_empty_database) {
     );
 
     cr_assert_eq(
-        sevdb_database_get_capacity(loaded_db),
+        sevdb_db_get_capacity(loaded_db),
         42
     );
 
     cr_assert_eq(
-        sevdb_database_get_count(loaded_db),
+        sevdb_db_get_count(loaded_db),
         0
     );
 
@@ -588,13 +588,13 @@ Test(database, should_preserve_vectors_after_remove_and_deserialization) {
         cr_assert_not_null(sevdb_db_push_vector(db, v));
     }
 
-    cr_assert_eq(sevdb_database_get_count(db), 5);
+    cr_assert_eq(sevdb_db_get_count(db), 5);
 
     /* Remove some vectors before serialization. */
     sevdb_db_remove_vector_by_id(db, 1);
     sevdb_db_remove_vector_by_id(db, 3);
 
-    cr_assert_eq(sevdb_database_get_count(db), 3);
+    cr_assert_eq(sevdb_db_get_count(db), 3);
 
     cr_assert(sevdb_db_serialize(db, path));
 
@@ -605,19 +605,19 @@ Test(database, should_preserve_vectors_after_remove_and_deserialization) {
 
     printf(
         "ORIGINAL: capacity=%d count=%d\n",
-        sevdb_database_get_capacity(db),
-        sevdb_database_get_count(db)
+        sevdb_db_get_capacity(db),
+        sevdb_db_get_count(db)
     );
     
     printf(
         "LOADED: capacity=%d count=%d\n",
-        sevdb_database_get_capacity(loaded_db),
-        sevdb_database_get_count(loaded_db)
+        sevdb_db_get_capacity(loaded_db),
+        sevdb_db_get_count(loaded_db)
     );
 
 
     cr_assert_eq(
-        sevdb_database_get_count(loaded_db),
+        sevdb_db_get_count(loaded_db),
         3
     );
 
