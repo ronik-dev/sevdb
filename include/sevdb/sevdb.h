@@ -26,6 +26,7 @@ sevdb_vector* sevdb_vector_create(uint32_t id, uint32_t dimensions, const float 
 void sevdb_vector_destroy(sevdb_vector *v);
 
 // --- Vector Getters ---
+// these assume a valid, non-NULL object; passing NULL is a programmer error, not a runtime condition
 uint32_t sevdb_vector_get_id(sevdb_vector *v);
 uint32_t sevdb_vector_get_dimensions(sevdb_vector *v);
 float* sevdb_vector_get_components(sevdb_vector *v);
@@ -52,6 +53,7 @@ sevdb_database* sevdb_db_create(uint32_t capacity);
 void sevdb_db_destroy(sevdb_database *db);
  
 // --- Database Getters ---
+// these assume a valid, non-NULL object; passing NULL is a programmer error, not a runtime condition
 uint32_t sevdb_db_get_capacity(sevdb_database *db);
 uint32_t sevdb_db_get_count(sevdb_database *db);
 
@@ -76,7 +78,7 @@ sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);
  * @return A pointer to the vector, or NULL if the ID is not found. 
  *         The database retains ownership of the returned memory.
  */
-sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, int id);
+sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id);
 
 /**
  * @brief Removes a vector from the database by its ID and frees its memory.

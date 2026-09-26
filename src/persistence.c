@@ -10,9 +10,9 @@
 
 #define MAGIC "SEVDB"
 #define MAGIC_SIZE 5
-const uint32_t version = 1;
+static const uint32_t version = 1;
 
-const bool sevdb_vector_serialize(FILE* fp, sevdb_vector* v){
+bool sevdb_vector_serialize(FILE* fp, sevdb_vector* v){
     if (v == NULL || fp == NULL) return false;
     // serialize id
     if (fwrite(&v->id, sizeof(v->id), 1, fp) != 1){

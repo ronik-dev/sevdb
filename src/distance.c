@@ -16,7 +16,7 @@ float get_euclidean_distance(int dimensions, float* v1, float* v2){
 
 float get_cosine_similarity(int dimensions, float* v1, float* v2){
     if (dimensions <= 0) return 0;
-    if (v1 == NULL | v2 == NULL) return 0;
+    if (v1 == NULL || v2 == NULL) return 0;
     float v1v2 = 0.0f;
     float v1_squared = 0.0f;
     float v2_squared = 0.0f;

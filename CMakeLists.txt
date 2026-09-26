@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.11)
-project(sevdb LANGUAGES C)
+project(sevdb VERSION 0.1.0 LANGUAGES C DESCRIPTION "one small embedded vector database")
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+
 
 #-----------------
 #- THE LIBRARIES -
@@ -19,6 +20,16 @@ target_include_directories(sevdb PUBLIC include)
 target_include_directories(sevdb PRIVATE src)
 # math standard library
 target_link_libraries(sevdb PRIVATE m)
+
+#--------------
+#- VERSIONING -
+#--------------
+
+configure_file(
+    ${CMAKE_SOURCE_DIR}/include/sevdb/version.h.in
+    ${CMAKE_BINARY_DIR}/include/sevdb/version.h
+)
+target_include_directories(sevdb PUBLIC ${CMAKE_BINARY_DIR}/include)
 
 #---------------------
 #- THE TESTING SUITE -
