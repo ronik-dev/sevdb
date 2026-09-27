@@ -1,8 +1,6 @@
 #pragma once
 #include <stdint.h>
 
-#define SEVDB_MAX_VECTOR_DIMENSIONS 4096
-
 struct sevdb_vector{
     uint32_t id;            //unique identifier 
     uint32_t dimensions;    //number of dimensions (components) of the vector

@@ -18,6 +18,18 @@ Test(vector, should_create_and_read) {
     sevdb_vector_destroy(v);
 }
 
+Test(vector, should_reject_zero_dimensions) {
+    float dummy = 1.0f;
+    sevdb_vector *v = sevdb_vector_create(1, 0, &dummy);
+    cr_assert_null(v, "Vector creation should reject dimensions == 0");
+}
+
+Test(vector, should_reject_dimensions_over_max) {
+    float dummy[1] = {1.0f};
+    sevdb_vector *v = sevdb_vector_create(1, SEVDB_MAX_VECTOR_DIMENSIONS + 1, dummy);
+    cr_assert_null(v, "Vector creation should reject dimensions above SEVDB_MAX_VECTOR_DIMENSIONS");
+}
+
 Test(database, should_create_push_and_read) {
     //create
     sevdb_database *db = sevdb_db_create(42);
@@ -97,6 +109,49 @@ Test(database, should_increase_capacity) {
     cr_assert_eq(search, v2, "Could not retrieve vector added after capacity increase");
 
     // clean
+    sevdb_db_destroy(db);
+}
+
+Test(database, should_handle_multiple_capacity_increases_and_pushes) {
+    sevdb_database *db = sevdb_db_create(2);
+    cr_assert_not_null(db);
+
+    sevdb_vector *inserted[14] = {0};
+
+    for (int round = 0; round < 3; round++) {
+        while (sevdb_db_get_count(db) < sevdb_db_get_capacity(db)) {
+            uint32_t idx = sevdb_db_get_count(db);
+            float components[2] = {(float)idx, (float)idx * 2.0f};
+            sevdb_vector *v = sevdb_vector_create(idx, 2, components);
+            cr_assert_not_null(v);
+            cr_assert_not_null(sevdb_db_push_vector(db, v),
+                "Push failed while capacity had room");
+            inserted[idx] = v;
+        }
+
+        cr_assert(sevdb_db_increase_capacity(db, 4),
+            "Capacity increase failed on round %d", round);
+    }
+
+    // Fill the newly grown region entirely.
+    while (sevdb_db_get_count(db) < sevdb_db_get_capacity(db)) {
+        uint32_t idx = sevdb_db_get_count(db);
+        float components[2] = {(float)idx, (float)idx * 2.0f};
+        sevdb_vector *v = sevdb_vector_create(idx, 2, components);
+        cr_assert_not_null(v);
+        cr_assert_not_null(sevdb_db_push_vector(db, v),
+            "Push failed after capacity growth at index %d", idx);
+        inserted[idx] = v;
+    }
+
+    uint32_t final_count = sevdb_db_get_count(db);
+    for (uint32_t i = 0; i < final_count; i++) {
+        sevdb_vector *found = sevdb_db_get_vector_by_id(db, i);
+        cr_assert_not_null(found, "Vector %d lost after capacity growth", i);
+        cr_assert_eq(found, inserted[i],
+            "Vector %d pointer changed unexpectedly after capacity growth", i);
+    }
+
     sevdb_db_destroy(db);
 }
 
@@ -271,6 +326,38 @@ Test(database, should_serialize_and_deserialize_with_vectors) {
     sevdb_db_destroy(loaded_db);
 }
 
+Test(database, should_reject_corrupted_file_on_deserialize) {
+    const char *path = "./test_corrupted_file.bin";
+
+    sevdb_database *db = sevdb_db_create(5);
+    float components[2] = {1.0f, 2.0f};
+    sevdb_vector *v = sevdb_vector_create(1, 2, components);
+    cr_assert_not_null(sevdb_db_push_vector(db, v));
+    cr_assert(sevdb_db_serialize(db, path), "Failed to serialize database");
+
+    // Flip one byte just past the header (magic[5] + version[4] + capacity[4]
+    // + count[4] = 17), landing inside the first vector's id field.
+    FILE *fp = fopen(path, "r+b");
+    cr_assert_not_null(fp, "Failed to reopen serialized file for corruption");
+
+    long corrupt_offset = 17;
+    cr_assert_eq(fseek(fp, corrupt_offset, SEEK_SET), 0);
+
+    uint8_t original_byte;
+    cr_assert_eq(fread(&original_byte, 1, 1, fp), 1);
+    cr_assert_eq(fseek(fp, corrupt_offset, SEEK_SET), 0);
+
+    uint8_t corrupted_byte = original_byte ^ 0xFF;
+    cr_assert_eq(fwrite(&corrupted_byte, 1, 1, fp), 1);
+    fclose(fp);
+
+    sevdb_database *loaded_db = sevdb_db_deserialize(path);
+    cr_assert_null(loaded_db,
+        "Deserialize should reject a file with a corrupted checksum");
+
+    sevdb_db_destroy(db);
+    remove(path);
+}
 
 Test(database, should_preserve_search_results_after_deserialization) {
     const char *path = "./test_search_deserialization.bin";

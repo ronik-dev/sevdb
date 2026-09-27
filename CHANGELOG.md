@@ -5,7 +5,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-09-26
+## [0.1.0] - 2026-09-27
 ### Added
 - Vector and database lifecycle management (create/destroy) with a callee-allocates heap model.
 - CRUD operations: push, get-by-id, remove-by-id, capacity growth.
@@ -13,3 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Top-K similarity search backed by a binary heap priority queue.
 - Binary serialization/deserialization with CRC32 checksums and atomic temp-file writes.
 - Criterion-based test suites (internal, distance, priority queue) and a benchmark harness.
+- CI pipeline building and testing the project on every push and pull request to `main`.
+- Versioned CMake build (`project(sevdb VERSION ...)`) with a generated `version.h`.
+- Project documentation: `ARCHITECTURE.md` and `CONTRIBUTING.md`.

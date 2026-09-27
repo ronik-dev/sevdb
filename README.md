@@ -3,11 +3,11 @@
 
 #### Goal
 This is a personal project that aims to create a simple embedded vector database in C.
-This does not intend do be a finished production ready product, as i am more intrested in learning how vector databeses work and improve my C programming language skills.
+This does not intend to be a finished production ready product, as i am more interested in learning how vector databases work and improve my C programming language skills.
 The main functionalities i aim to produce are:
 - Uploading new vectors to the database
 - Deleting vectors from the database
-- Implement a retrival algorithm (starting from linear search, maybe later move to HNSW)
+- Implement a retrieval algorithm (starting from linear search, maybe later move to HNSW)
 - Support mutiple vector sizes on request
 - Serialize the db to a local file
 - Deserialize the db from a local file
@@ -26,3 +26,26 @@ Use the included `Makefile` to interact with the project:
 - **Run the test suite:** `make test`
 - **Clean the environment:** `make clean`
 - **Open a dev shell:** `make shell`
+
+#### Using sevdb in your project
+sevdb is currently consumed via CMake as a subdirectory:
+
+    git submodule add https://github.com/<you>/sevdb third_party/sevdb
+
+    # in your CMakeLists.txt
+    add_subdirectory(third_party/sevdb)
+    target_link_libraries(your_target PRIVATE sevdb)
+
+Note this pulls in `SEVDB_BUILD_TESTS` defaulting to ON — set it to OFF in your project
+to avoid requiring Criterion:
+
+    set(SEVDB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+#### Updates
+To stay up to date with the latest changes to the project, take a look at `CHANGELOG.md`
+
+#### Architecture
+If you are interested in the project's architecture and the choices behind it, please read `ARCHITECTURE.md`
+
+#### Contributing
+If you are interested in contributing but don't know where to start, please read `CONTRIBUTING.md`

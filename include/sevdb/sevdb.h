@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include "types.h"
 
+#define SEVDB_MAX_VECTOR_DIMENSIONS 4096
+
 // ==========================================
 // == VECTOR LIFECYCLE & OPERATIONS        ==
 // ==========================================
