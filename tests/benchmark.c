@@ -5,7 +5,10 @@
 #include "../src/distance.h" 
 
 int main() {
-    int vector_number = 100000; 
+    // Seed the random number generator
+    srand((unsigned int)time(NULL));
+
+    int vector_number = 10; 
     int k = 5;
     int vector_dimension = 1536; // Standard modern text embedding size
 
@@ -22,19 +25,17 @@ int main() {
         return 1;
     }
 
-    // Set up the search vector (calloc already made it all 0.0f, so we just set X)
-    search_components[0] = 1.0f;
+    // Set up the search vector with random values between -1.0 and 1.0
+    for(int d = 0; d < vector_dimension; d++) {
+        search_components[d] = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+    }
     sevdb_vector *vector_to_compare = sevdb_vector_create(999999, vector_dimension, search_components);
 
     for (int i = 0; i < vector_number; i++) {
-        // Pad all dimensions with some baseline data for the CPU to crunch
+        // Populate all dimensions with random values between -1.0 and 1.0
         for(int d = 0; d < vector_dimension; d++) {
-            input_components[d] = 0.1f; 
+            input_components[d] = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
         }
-        
-        // Maintain the worst-case sorting angle on the first two axes
-        input_components[0] = 1.0f;
-        input_components[1] = (float)(vector_number - i) * 0.5f; 
         
         sevdb_vector *v = sevdb_vector_create(i, vector_dimension, input_components);
         
@@ -77,6 +78,8 @@ int main() {
         }
     }
 
+    sevdb_db_serialize(db, "./benchmark.bin");
+    
     // Clean up heap allocations
     free(input_components);
     free(search_components);

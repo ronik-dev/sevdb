@@ -4,6 +4,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- `sevdb_db_push_vector` now rejects a vector whose id already exists in the database, returning `NULL`.  
+    On rejection, ownership of the vector is never transferred the caller is responsible for destroying it.
+
+### Fixed
+- Fixed a signed/unsigned comparison in `sevdb_db_push_vector`'s free-slot scan (`int i` compared against `uint32_t capacity`).
 
 ## [0.1.0] - 2026-09-27
 ### Added

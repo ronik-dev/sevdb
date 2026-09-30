@@ -47,6 +47,24 @@ Test(database, should_create_push_and_read) {
     sevdb_db_destroy(db);
 }
 
+Test(database, should_reject_duplicate_id_on_push) {
+    sevdb_database *db = sevdb_db_create(5);
+
+    float components1[2] = {1.0f, 2.0f};
+    sevdb_vector *v1 = sevdb_vector_create(42, 2, components1);
+    cr_assert_not_null(sevdb_db_push_vector(db, v1));
+
+    float components2[2] = {9.0f, 9.0f};
+    sevdb_vector *v2 = sevdb_vector_create(42, 2, components2); // same id
+    sevdb_vector *result = sevdb_db_push_vector(db, v2);
+
+    cr_assert_null(result, "Push should reject a duplicate id");
+    cr_assert_eq(sevdb_db_get_count(db), 1, "Count should not increase on rejected push");
+
+    sevdb_vector_destroy(v2); // ownership never transferred, caller must clean up
+    sevdb_db_destroy(db);
+}
+
 
 Test(database, should_create_push_remove_and_read) {
     //create
@@ -69,6 +87,7 @@ Test(database, should_create_push_remove_and_read) {
     //clean
     sevdb_db_destroy(db);
 }
+
 
 Test(database, should_increase_capacity) {
     // create database with small capacity

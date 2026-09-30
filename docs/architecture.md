@@ -51,6 +51,7 @@ The alternative (storing a separate `float*` pointer to a second allocation) was
 ### Ownership transfer on push
 
 `sevdb_db_push_vector` transfers ownership of the vector to the database on success: from that point, the database is responsible for freeing it (which happens in `sevdb_db_destroy` or `sevdb_db_remove_vector_by_id`), and the caller must not call `sevdb_vector_destroy` on it themselves. 
+The function will reject a vector if the database already contains another with the same id. In this case ownership is not transfered, and the caller should manually destroy the vector.
 This is documented in `sevdb.h`'s Doxygen comments and is the one place in the API where ownership crosses a boundary, worth knowing before extending the API, since introducing a second ownership-transfer point without equally clear documentation is an easy way to create a double-free.
 
 ## Data structure: dense pointer array, not a hash map

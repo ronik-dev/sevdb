@@ -70,6 +70,10 @@ bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase);
  *
  * @note **Ownership Transfer:** If successful, the database assumes ownership of the vector's memory. 
  *      Do not manually call sevdb_vector_destroy on it.
+ * 
+ * @note **Vector ID uniqueness:** The database rejects vector with duplicate ids.
+ *      This means that if you wish to destroy a rejected vector, you should do it manually, and not through the database.
+ *
  * @return The inserted vector on success, or NULL if the database is full, arguments are NULL, or insertion fails.
  */
 sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);

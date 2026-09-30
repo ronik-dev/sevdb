@@ -2,7 +2,6 @@
 #include "sevdb_private.h"
 #include "distance.h"
 #include "pqueue.h"
-#include "checksum.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -108,12 +107,22 @@ sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
     if (db == NULL || v == NULL) return NULL;
     if (db->count >= db->capacity) return NULL;
     //serch for free spot
-    for(int i = 0; i < db->capacity; i++){
-        if (db->vectors[i] == NULL){
-            db->vectors[i] = v;
-            db->count++;
-            return v;
+    uint32_t free_slot; 
+    bool found_free_slot = false;
+    for(uint32_t i = 0; i < db->capacity; i++){
+        if (db->vectors[i] != NULL){
+            if (db->vectors[i]->id == v->id) return NULL;
+            continue;
         }
+        if (!found_free_slot){
+            free_slot = i;
+            found_free_slot = true;
+        }
+    }
+    if (found_free_slot){
+        db->vectors[free_slot] = v;
+        db->count++;
+        return v;
     }
     return NULL;
 }
