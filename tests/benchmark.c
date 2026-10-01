@@ -8,7 +8,7 @@ int main() {
     // Seed the random number generator
     srand((unsigned int)time(NULL));
 
-    int vector_number = 10; 
+    int vector_number = 100000; 
     int k = 5;
     int vector_dimension = 1536; // Standard modern text embedding size
 

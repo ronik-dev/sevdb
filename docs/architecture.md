@@ -141,5 +141,3 @@ These are open, acknowledged tradeoffs tracked here so the reasoning isn't lost,
   Multithreading (either parallelizing the linear scan across the vector array, or supporting concurrent readers) is a planned enhancement once the single-threaded correctness story is solid.
 - **Persistence depends on POSIX APIs** (`mkstemp`, `unistd.h`) for atomic writes. 
   Standard C has no equivalent primitive, so portability to non-POSIX targets (e.g. native Windows) would require an abstraction layer over the temp-file-and-rename logic.
-- **ID generation is caller-supplied**, with no built-in uniqueness enforcement or generation scheme. 
-  Flagged in the devlogs as needing a coherent policy before the API is considered stable.

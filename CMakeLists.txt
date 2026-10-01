@@ -26,8 +26,8 @@ target_link_libraries(sevdb PRIVATE m)
 #--------------
 
 configure_file(
-    ${CMAKE_SOURCE_DIR}/include/sevdb/version.h.in
-    ${CMAKE_BINARY_DIR}/include/sevdb/version.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/sevdb/version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/include/sevdb/version.h
 )
 target_include_directories(sevdb PUBLIC ${CMAKE_BINARY_DIR}/include)
 

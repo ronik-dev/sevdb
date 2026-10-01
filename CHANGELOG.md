@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Fixed a signed/unsigned comparison in `sevdb_db_push_vector`'s free-slot scan (`int i` compared against `uint32_t capacity`).
+- Fixed configuration file issue in CMakeLists that prevented correct import an use in other projects.
 
 ## [0.1.0] - 2026-09-27
 ### Added
