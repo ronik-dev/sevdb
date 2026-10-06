@@ -2,7 +2,7 @@
 #include <math.h>
 #include <string.h>
 
-float get_euclidean_distance(int dimensions, float* v1, float* v2){
+float get_euclidean_distance(int dimensions, const float* v1, const float* v2){
     if (dimensions <= 0) return 0;
     if (v1 == NULL | v2 == NULL) return 0;
     float diff;
@@ -14,7 +14,7 @@ float get_euclidean_distance(int dimensions, float* v1, float* v2){
     return sqrtf(squared_sums);
 }
 
-float get_cosine_similarity(int dimensions, float* v1, float* v2){
+float get_cosine_similarity(int dimensions, const float* v1, const float* v2){
     if (dimensions <= 0) return 0;
     if (v1 == NULL || v2 == NULL) return 0;
     float v1v2 = 0.0f;

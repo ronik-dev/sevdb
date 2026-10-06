@@ -13,7 +13,7 @@
  * @param v2 Pointer to the second vector's component array.
  * @return The calculated distance as a float. 
  */
-float get_euclidean_distance(int dimensions, float* v1, float* v2);
+float get_euclidean_distance(int dimensions, const float* v1, const float* v2);
 
 /**
  * @brief Calculates the Cosine Similarity between two non-zero vectors.
@@ -33,4 +33,4 @@ float get_euclidean_distance(int dimensions, float* v1, float* v2);
  * @param v2 Pointer to the second vector's component array.
  * @return The cosine similarity score as a float.
  */
-float get_cosine_similarity(int dimensions, float* v1, float* v2);
+float get_cosine_similarity(int dimensions, const float* v1, const float* v2);

@@ -29,9 +29,9 @@ void sevdb_vector_destroy(sevdb_vector *v);
 
 // --- Vector Getters ---
 // these assume a valid, non-NULL object; passing NULL is a programmer error, not a runtime condition
-uint32_t sevdb_vector_get_id(sevdb_vector *v);
-uint32_t sevdb_vector_get_dimensions(sevdb_vector *v);
-float* sevdb_vector_get_components(sevdb_vector *v);
+uint32_t sevdb_vector_get_id(const sevdb_vector *v);
+uint32_t sevdb_vector_get_dimensions(const sevdb_vector *v);
+const float* sevdb_vector_get_components(const sevdb_vector *v);
 
 
 // ==========================================
@@ -56,8 +56,8 @@ void sevdb_db_destroy(sevdb_database *db);
  
 // --- Database Getters ---
 // these assume a valid, non-NULL object; passing NULL is a programmer error, not a runtime condition
-uint32_t sevdb_db_get_capacity(sevdb_database *db);
-uint32_t sevdb_db_get_count(sevdb_database *db);
+uint32_t sevdb_db_get_capacity(const sevdb_database *db);
+uint32_t sevdb_db_get_count(const sevdb_database *db);
 
 // --- Database Setters 
 bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase);
@@ -100,10 +100,10 @@ void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
  * @param db Pointer to the database to search.
  * @param v The target vector to compare against.
  * @param k The maximum number of similar vectors to return.
- * @param out_vector_list A caller-allocated array of vector pointers (size >= k) that will be populated with the best matches.
- * @return The actual number of vectors found and placed into out_vector_list.
+ * @param out_result) A caller-allocated array of sevdb_similarity_scored_vector (size >= k) that will be populated with the best matches.
+ * @return The actual number of vectors found and placed into out_result.
  */
-int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list);
+int sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v, int k, sevdb_similarity_scored_vector* out_results);
 
 
 // ==========================================

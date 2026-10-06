@@ -30,17 +30,17 @@ void sevdb_vector_destroy(sevdb_vector *v){
     if (v != NULL) free(v);
 }
 
-uint32_t sevdb_vector_get_id(sevdb_vector *v){
+uint32_t sevdb_vector_get_id(const sevdb_vector *v){
     assert(v != NULL);
     return v->id;
 }
 
-uint32_t sevdb_vector_get_dimensions(sevdb_vector *v){
+uint32_t sevdb_vector_get_dimensions(const sevdb_vector *v){
     assert(v != NULL);
     return v->dimensions;
 }
 
-float* sevdb_vector_get_components(sevdb_vector *v){
+const float* sevdb_vector_get_components(const sevdb_vector *v){
     assert(v != NULL);
     return v->components;
 }
@@ -93,12 +93,12 @@ bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase){
     return true;
 }
 
-uint32_t sevdb_db_get_capacity(sevdb_database *db){
+uint32_t sevdb_db_get_capacity(const sevdb_database *db){
     assert(db != NULL);
     return db->capacity;
 }
 
-uint32_t sevdb_db_get_count(sevdb_database *db){
+uint32_t sevdb_db_get_count(const sevdb_database *db){
     assert(db != NULL);
     return db->count;
 }
@@ -156,8 +156,8 @@ void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
 static bool is_max_heap(float a, float b) { return a > b; }
 static bool is_min_heap(float a, float b) { return a < b; }
 
-int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k, sevdb_vector** out_vector_list){
-    if (db == NULL || db->count == 0 || v == NULL || out_vector_list == NULL) return 0;
+int sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v, int k, sevdb_similarity_scored_vector* out_results){
+    if (db == NULL || db->count == 0 || v == NULL || out_results == NULL) return 0;
 
     pqueue* pq = pq_create(k, is_min_heap);
     if (pq == NULL) return 0;
@@ -199,7 +199,8 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, sevdb_vector* v, int k
 
     for(int i = retrieved - 1; i >= 0; i--){
         if  (pq_dequeue(pq, &out)) {
-            out_vector_list[i] = (sevdb_vector*)out.content;
+            out_results[i].vector = (sevdb_vector*)out.content;
+            out_results[i].score = out.priority;
         }
     }
 
