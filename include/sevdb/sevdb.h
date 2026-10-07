@@ -3,6 +3,10 @@
 #include <stdint.h>
 #include "types.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define SEVDB_MAX_VECTOR_DIMENSIONS 4096
 
 // ==========================================
@@ -144,3 +148,8 @@ bool sevdb_db_serialize(sevdb_database *db, const char *path);
  * @return A pointer to the reconstructed database, or NULL on failure.
  */
 sevdb_database* sevdb_db_deserialize(const char *path);
+
+
+#ifdef __cplusplus
+}
+#endif

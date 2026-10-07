@@ -1,5 +1,9 @@
 #pragma once
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @struct sevdb_vector
  * @brief The fundamental building block of the database.
@@ -30,3 +34,8 @@ typedef struct sevdb_similarity_scored_vector{
     sevdb_vector* vector;
     float score;
 }sevdb_similarity_scored_vector;
+
+
+#ifdef __cplusplus
+}
+#endif
