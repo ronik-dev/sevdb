@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.11)
-project(sevdb VERSION 0.2.0 LANGUAGES C DESCRIPTION "one small embedded vector database")
+project(sevdb VERSION 0.3.0 LANGUAGES C DESCRIPTION "one small embedded vector database")
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -13,6 +13,7 @@ add_library(sevdb STATIC
     src/sevdb.c
     src/distance.c
     src/pqueue.c
+    src/hashmap.c
     src/checksum.c
     src/persistence.c
 )
@@ -40,13 +41,16 @@ if(SEVDB_BUILD_TESTS)
     add_executable(internal_test_suite tests/internal_test.c)
     add_executable(distance_test_suite tests/distance_test.c)
     add_executable(priority_queue_test_suite tests/pqueue_test.c)
+    add_executable(hash_map_test_suite tests/hashmap_test.c)
     add_executable(benchmark tests/benchmark.c)
     find_library(CRITERION_LIB criterion REQUIRED)
     target_link_libraries(internal_test_suite PRIVATE sevdb ${CRITERION_LIB})
     target_link_libraries(distance_test_suite PRIVATE sevdb ${CRITERION_LIB})
     target_link_libraries(priority_queue_test_suite PRIVATE sevdb ${CRITERION_LIB})
+    target_link_libraries(hash_map_test_suite PRIVATE sevdb ${CRITERION_LIB})
     target_link_libraries(benchmark PRIVATE sevdb)
     add_test(NAME internal_tests COMMAND internal_test_suite)
     add_test(NAME distance_tests COMMAND distance_test_suite)
     add_test(NAME priority_queue_tests COMMAND priority_queue_test_suite)
+    add_test(NAME hash_map_tests COMMAND hash_map_test_suite)
 endif()

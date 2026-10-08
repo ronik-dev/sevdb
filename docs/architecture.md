@@ -54,44 +54,157 @@ The alternative (storing a separate `float*` pointer to a second allocation) was
 The function will reject a vector if the database already contains another with the same id. In this case ownership is not transfered, and the caller should manually destroy the vector.
 This is documented in `sevdb.h`'s Doxygen comments and is the one place in the API where ownership crosses a boundary, worth knowing before extending the API, since introducing a second ownership-transfer point without equally clear documentation is an easy way to create a double-free.
 
-## Data structure: dense pointer array, not a hash map
+## Data structure: Packed vector array with a Hash Index
 
-`sevdb_database` stores vectors in a flat array of pointers:
+`sevdb_database` uses two complementary data structures:
 
 ```c
 struct sevdb_database {
     uint32_t capacity;
     uint32_t count;
     sevdb_vector **vectors;
+    hashmap *vector_id_map;
 };
 ```
 
-Lookup by ID (`sevdb_db_get_vector_by_id`), similarity search, and iteration over all vectors during serialization are all linear scans over this array. 
-This was a deliberate starting point, not a final answer: it's the simplest structure that satisfies the current test suite and lets everything else (search, persistence, capacity growth) be built and understood first. 
-It also means similarity search, which must inspect every vector's components regardless of the storage structure, isn't actually made asymptotically worse by the array, the cost is dominated by the distance calculation itself, not the lookup.
+The `vectors` array is the primary storage for vector objects. It is allocated to `capacity` entries, while `count` records how many vectors are currently stored. The database maintains a **packed-array invariant**: all stored vectors occupy the range `[0, count)`, with no `NULL` holes between active entries.
+The second structure, `vector_id_map`, is a hash map from a vector's unique `uint32_t` ID to its current index in the `vectors` array.
+This separation gives the database two useful properties:
+- The vector array provides compact, contiguous storage of vector pointers and makes scanning all vectors straightforward.
+- The hash map provides direct lookup of a vector's array position by ID without scanning the entire database.
 
-The known cost is O(n) ID lookup and O(n) removal, and free slots are found by scanning for the first `NULL` on push. 
-This is the primary target noted in `docs/devlogs/` as **"consider better data structure for storing vectors"**, a hash map keyed by ID would fix point lookups, but the tradeoff (extra memory, more complex serialization, needing search to still touch every vector for now) hasn't yet been worth taking on for the current scale.
+### ID lookup
+
+`sevdb_db_get_vector_by_id` first queries `vector_id_map` using the vector ID. If the key exists, the stored value is interpreted as an index into `vectors`, and the vector at that position is returned after verifying that its ID still matches.
+Under normal operation, hash-map lookup is approximately **O(1)** average time, compared with the O(n) lookup that would be required by scanning the vector array.
+The hash map therefore acts as an **index**, rather than being the primary owner of vector objects. It stores only the relationship:
+
+```text
+vector ID -> position in vectors[]
+```
+
+The actual vector remains owned by the database's vector array.
+
+### Removal and packed-array maintenance
+
+Removing a vector does not leave a hole in the array. Instead, `sevdb_db_remove_vector_by_id` performs a **swap-with-last** operation:
+
+1. Find the vector's array index through `vector_id_map`.
+2. Remove its ID from the hash map.
+3. If the vector is not already the last element, move the last vector into the removed vector's position.
+4. Update the moved vector's hash-map entry to its new index.
+5. Clear the old last slot.
+6. Decrement `count`.
+
+For example:
+
+```text
+Before removal:
+
+vectors:
+[ A ][ B ][ C ][ D ]
+
+map:
+A -> 0
+B -> 1
+C -> 2
+D -> 3
+
+Remove B:
+
+vectors:
+[ A ][ D ][ C ][ NULL ]
+
+map:
+A -> 0
+C -> 2
+D -> 1
+```
+
+This makes removal **O(1) average time** for the hash-map lookup plus constant-time array manipulation. The tradeoff is that vector positions are not stable: removing one vector can change the array index of another vector. Code outside the database should therefore never treat an array index as a persistent vector identifier.
+
+### Insertion
+
+`sevdb_db_push_vector` appends a vector at `vectors[count]` and inserts its ID and resulting index into the hash map.
+
+Insertion is rejected when:
+- the database is full;
+- the vector pointer is `NULL`; or
+- another vector already has the same ID.
+
+The operation is performed transactionally with respect to the two data structures: the vector is first placed into the array and `count` is incremented, but if the hash-map insertion fails, the array slot and count are rolled back.
+This is important because the vector array and hash index must remain consistent. A vector present in the array without a corresponding hash-map entry would make ID lookup incorrect.
 
 ### Capacity growth
 
-`sevdb_db_increase_capacity` grows the backing array via `realloc` and zeroes the newly added region so it's indistinguishable from a freshly created database of the larger capacity. 
-Growth is one-directional (capacity only ever increases) there is no shrink-to-fit operation.
+`sevdb_db_increase_capacity` grows only the vector-pointer array. Existing vector objects are not moved because the array contains pointers rather than the vector objects themselves.
+The new region of the pointer array is explicitly zeroed, preserving the `NULL` representation for unused capacity.
+Capacity growth is one-directional: the database can increase its capacity but does not currently shrink it.
+The hash map is independent of this operation. Its own capacity is managed internally by `hm_grow`, which rehashes existing entries when its load factor reaches the configured threshold.
 
-## Similarity search: top-K via a bounded priority queue
+### Hash-map implementation
 
-`sevdb_db_search_k_similar_vectors` performs a **linear scan** over the database, scoring each candidate by cosine similarity against the query vector (`get_cosine_similarity` in `distance.c`), and maintains the current best-K candidates in a **fixed-capacity binary heap** (`pqueue.c`).
+The ID index uses an open-addressed hash table with linear probing.
+Each hash-map slot has one of three states:
 
-The key design choice here is that `pqueue` is **generic over ordering** via a comparator function pointer (`pq_compare_fn`), rather than being hardcoded to either a min-heap or max-heap:
-
-```c
-typedef bool(*pq_compare_fn)(float a, float b);
+```text
+EMPTY
+USED
+DELETED
 ```
 
-This lets the same priority queue implementation serve as a *min-heap* bounded to the K-best when the metric is "smaller is better" (Euclidean distance) or a *max-heap* when "larger is better" (cosine similarity): the caller supplies `is_min_heap`/`is_max_heap` at creation time rather than the queue baking in an assumption about metric direction. 
-`sevdb_db_search_k_similar_vectors` bounds the heap to capacity `k` and only replaces the current worst element when a new candidate beats it, which keeps the search's extra memory at O(k) regardless of database size, at the cost of O(n log k) time for the full scan, appropriate for a linear-scan baseline, and the natural place to plug in an approximate algorithm (see Future Directions) without changing the heap itself.
+The hash function currently uses the integer ID directly:
 
-NaN priorities are explicitly rejected at `pq_enqueue`, since a NaN would silently break heap ordering (NaN comparisons are always false, which can corrupt the heap invariant in ways that are hard to detect after the fact).
+```c
+key % capacity
+```
+
+Because the vector IDs are already integer keys, this keeps the implementation simple.
+Collisions are resolved through linear probing. Deleted entries are marked `DELETED` rather than reset to `EMPTY`, because an `EMPTY` slot would terminate a subsequent probe sequence and could make keys that occur later in the sequence unreachable.
+When the hash map becomes sufficiently full, `hm_grow` allocates a larger table and re-inserts all active entries using the new capacity. Rehashing is necessary because changing the table capacity changes the result of `key % capacity`.
+The hash map therefore gives the database approximately **O(1) average ID lookup, insertion, and removal**, while the packed vector array provides efficient sequential traversal for operations such as similarity search.
+
+## Similarity search: linear scan with bounded top-K heap
+
+`sevdb_db_search_k_similar_vectors` performs an exhaustive linear search over the vectors currently stored in the database.
+For each candidate with the same dimensionality as the query vector, the database calculates cosine similarity using `get_cosine_similarity`. The search does not allocate a result structure proportional to the database size. Instead, it maintains a fixed-capacity priority queue containing at most `k` candidates.
+For cosine similarity, larger scores are better. The priority queue is therefore configured as a **min-heap**, making the root the worst candidate currently retained in the top-K set.
+The algorithm is:
+
+```text
+for every stored vector:
+    skip incompatible dimensions
+
+    calculate cosine similarity
+
+    if fewer than K results are stored:
+        insert candidate
+    else if candidate is better than the worst stored result:
+        remove worst result
+        insert candidate
+```
+
+This produces:
+
+- **Time:** O(n log k)
+- **Additional memory:** O(k)
+- **Vector scoring:** O(n · d), where `d` is the vector dimensionality
+
+The distance calculation is generally the dominant operation because every compatible vector must be examined.
+
+The priority queue is deliberately generic. Its comparison function determines whether it behaves as a min-heap or max-heap, allowing the same implementation to support metrics where either smaller or larger scores represent better matches.
+
+For cosine similarity, `sevdb_db_search_k_similar_vectors` uses:
+
+```c
+static bool is_min_heap(float a, float b) {
+    return a < b;
+}
+```
+
+This may initially appear counterintuitive because the search wants the highest cosine similarities. The min-heap is intentional: the smallest score among the retained top-K candidates is placed at the root so it can be efficiently identified and replaced when a better candidate is found.
+
+The current implementation iterates through the allocated `capacity` of the pointer array and ignores `NULL` entries. Because the database now maintains a packed-array invariant, this could be simplified to iterate over `[0, count)` instead. Doing so would make the relationship between the data structure invariant and the search implementation explicit and avoid inspecting unused capacity.
 
 ## Persistence: versioned binary format with checksummed atomic writes
 
@@ -132,12 +245,20 @@ Tests are split into suites by concern (`internal_test_suite`, `distance_test_su
 
 ## Known limitations and future directions
 
-These are open, acknowledged tradeoffs tracked here so the reasoning isn't lost, and expanded on as they're addressed:
-
-- **Linear search is O(n) per query.** Fine at the current scale (see the benchmark), but the natural next step for larger datasets is an approximate nearest-neighbor structure (HNSW is the leading candidate per the devlogs). 
-  The `pqueue` abstraction was written to stay reusable for that: whatever candidate-generation strategy replaces the full linear scan can still feed results through the same bounded top-K heap.
-- **Dense array storage means O(n) ID lookup/removal.** A hash map keyed by ID is the likely fix, deferred until it's clearly the bottleneck.
-- **No concurrency support.** All structures assume single-threaded access.
-  Multithreading (either parallelizing the linear scan across the vector array, or supporting concurrent readers) is a planned enhancement once the single-threaded correctness story is solid.
-- **Persistence depends on POSIX APIs** (`mkstemp`, `unistd.h`) for atomic writes. 
-  Standard C has no equivalent primitive, so portability to non-POSIX targets (e.g. native Windows) would require an abstraction layer over the temp-file-and-rename logic.
+These are open tradeoffs that are intentionally documented so that future changes preserve the reasoning behind the current architecture.
+- **Similarity search is O(n log k).**  
+  The ID index makes individual vector lookup approximately O(1) on average, but nearest-neighbor search still requires examining every compatible vector. At larger dataset sizes, the natural next step is an approximate nearest-neighbor structure such as HNSW.
+- **The hash index consumes additional memory.**  
+  Each vector is represented both by its object in the vector array and by an entry in `vector_id_map`. This is worthwhile because ID lookup and removal are approximately O(1) on average, but it introduces additional memory overhead and requires the array and index to remain synchronized.
+- **Vector positions are not stable.**  
+  Removal uses swap-with-last compaction. As a result, deleting one vector can change the array index associated with another vector. The hash map is therefore the authoritative mechanism for resolving IDs to positions; callers should not depend on internal array positions.
+- **Similarity search is currently exhaustive.**  
+  The existing priority queue is reusable as the top-K result-selection mechanism, so an approximate candidate-generation structure could be introduced later without necessarily changing the result-ranking interface.
+- **No concurrency support.**  
+  The database, hash map, and vector storage currently assume single-threaded access. Concurrent reads or writes would require synchronization and a clearly defined ownership/thread-safety model.
+- **Persistence depends on POSIX APIs.**  
+  Atomic serialization currently relies on APIs such as `mkstemp`, `unistd.h`, and `rename()`. Portability to native Windows or other non-POSIX environments would require an abstraction around temporary-file creation and atomic replacement.
+- **Capacity only grows.**  
+  The database currently supports explicit capacity increases but has no shrink-to-fit mechanism. This keeps the memory model simple but can leave unused pointer capacity after large databases are reduced in size.
+- **Vector dimensionality is checked during search.**  
+  Vectors with dimensions different from the query vector are skipped rather than rejected globally. This allows a database to contain vectors of different dimensionalities, but means a query only considers compatible vectors.

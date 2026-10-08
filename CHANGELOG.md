@@ -5,6 +5,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-08
+### Added
+- Implemented a custom, linear-probing integer hash map (`hashmap.c`/`hashmap.h`) with automatic load-factor resizing and tombstone deletion.
+- Added a `hashmap_test_suite` to validate collision resolution, resizing, and tombstone logic.
+
+### Changed
+- Architectural Change: sevdb_database now utilizes a Sparse Set pattern (a dense array paired with a hash map).
+- `sevdb_db_push_vector` now operates in O(1) average time, utilizing the hash map for duplicate ID rejection.
+- `sevdb_db_get_vector_by_id` now operates in O(1) average time via direct hash map lookups.
+- `sevdb_db_remove_vector_by_id` now operates in O(1) average time utilizing a swap-and-pop technique, eliminating gaps in the dense array and preserving cache locality for search.
+
+
 ## [0.2.0] - 2026-10-07
 ### Changed
 - `sevdb_db_push_vector` now rejects a vector whose id already exists in the database, returning `NULL`.  

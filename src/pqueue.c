@@ -63,8 +63,8 @@ pqueue* pq_create(int capacity, pq_compare_fn comparator){
 }
 
 void pq_destroy(pqueue* pq){
-    if(pq == NULL) return; 
-    free(pq->elements);
+    if (pq == NULL) return; 
+    if (pq->elements !=NULL) free(pq->elements);
     free(pq);
 }
 

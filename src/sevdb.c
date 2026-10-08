@@ -61,6 +61,12 @@ sevdb_database* sevdb_db_create(uint32_t capacity){
         free(db);
         return NULL;
     }
+    db->vector_id_map = hm_create(capacity);
+    if (db->vector_id_map == NULL){
+        free(db->vectors);
+        free(db);
+        return NULL;
+    }
     return db;
 }
 
@@ -74,6 +80,7 @@ void sevdb_db_destroy(sevdb_database *db){
         }
         free(db->vectors);
     }
+    if (db->vector_id_map != NULL) hm_destroy(db->vector_id_map);
     free(db);
 }
 
@@ -89,7 +96,7 @@ bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase){
     memset(temp + db->capacity, 0,(new_capacity - db->capacity) * sizeof(sevdb_vector*));
 
     db->capacity = (uint32_t)new_capacity;
-    db->vectors = temp; 
+     db->vectors = temp; 
     return true;
 }
 
@@ -106,32 +113,25 @@ uint32_t sevdb_db_get_count(const sevdb_database *db){
 sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
     if (db == NULL || v == NULL) return NULL;
     if (db->count >= db->capacity) return NULL;
-    //serch for free spot
-    uint32_t free_slot; 
-    bool found_free_slot = false;
-    for(uint32_t i = 0; i < db->capacity; i++){
-        if (db->vectors[i] != NULL){
-            if (db->vectors[i]->id == v->id) return NULL;
-            continue;
-        }
-        if (!found_free_slot){
-            free_slot = i;
-            found_free_slot = true;
-        }
+    if (hm_contains_key(db->vector_id_map, v->id)) {
+        return NULL;
     }
-    if (found_free_slot){
-        db->vectors[free_slot] = v;
-        db->count++;
-        return v;
+    uint32_t target_index = db->count;
+    db->vectors[target_index] = v;
+    db->count++;
+    if (!hm_insert_new(db->vector_id_map, v->id, target_index)) {
+        db->vectors[target_index] = NULL;
+        db->count--;
+        return NULL;
     }
-    return NULL;
+    return v;
 }
 
 sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id){
     if (db == NULL || db->count == 0) return NULL;
-    sevdb_vector * v = NULL;
-    for(uint32_t i = 0; i < db->capacity; i++){
-        v = db->vectors[i];
+    uint32_t index; 
+    if(hm_get_value(db->vector_id_map, id, &index)){
+        sevdb_vector *v = db->vectors[index];
         if (v != NULL && v->id == id){
             return v; 
         }
@@ -141,16 +141,19 @@ sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id){
 
 void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
     if (db == NULL || db->count == 0) return;
-    sevdb_vector * v = NULL;
-    for(uint32_t i = 0; i < db->capacity; i++){
-        v = db->vectors[i];
-        if (v != NULL && v->id == id){
-            sevdb_vector_destroy(v);
-            db->vectors[i]=NULL;
-            db->count--;
-            return;
-        }
+    uint32_t index;
+    if(!hm_get_value(db->vector_id_map, id, &index)) return;
+    if(!hm_remove(db->vector_id_map, id)) return;
+    uint32_t last_index = db->count - 1;
+    sevdb_vector *removed = db->vectors[index];
+    if(index != last_index){
+        sevdb_vector* last_vector = db->vectors[last_index];
+        db->vectors[index] = last_vector;
+        hm_update_value(db->vector_id_map, last_vector->id, index);
     }
+    db->vectors[last_index] = NULL;
+    sevdb_vector_destroy(removed);
+    db->count--;
 }
 
 static bool is_max_heap(float a, float b) { return a > b; }
