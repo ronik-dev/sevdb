@@ -52,6 +52,7 @@ const float* sevdb_vector_get_components(const sevdb_vector *v){
 //------------
 
 sevdb_database* sevdb_db_create(uint32_t capacity){
+    if(capacity == 0) return NULL;
     sevdb_database *db = malloc(sizeof(sevdb_database));
     if (db == NULL) return NULL;
     db->capacity = capacity;
@@ -86,7 +87,7 @@ void sevdb_db_destroy(sevdb_database *db){
 
 
 bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase){
-    if (increase == 0) return false;
+    if (db == NULL || increase == 0) return false;
     uint64_t new_capacity = db->capacity + increase;
     if (new_capacity > UINT32_MAX) return false;
 
@@ -139,21 +140,65 @@ sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id){
     return NULL;
 }
 
-void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
-    if (db == NULL || db->count == 0) return;
+//bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
+//    if (db == NULL || db->count == 0) false;
+//    uint32_t index;
+//    if(!hm_get_value(db->vector_id_map, id, &index)) false;
+//    if(!hm_remove(db->vector_id_map, id)) false;
+//    uint32_t last_index = db->count - 1;
+//    sevdb_vector *removed = db->vectors[index];
+//    if(index != last_index){
+//        sevdb_vector* last_vector = db->vectors[last_index];
+//        db->vectors[index] = last_vector;
+//        hm_update_value(db->vector_id_map, last_vector->id, index);
+//    }
+//    db->vectors[last_index] = NULL;
+//    sevdb_vector_destroy(removed);
+//    db->count--;
+//}
+bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
+    if (db == NULL || db->count == 0) return false;
     uint32_t index;
-    if(!hm_get_value(db->vector_id_map, id, &index)) return;
-    if(!hm_remove(db->vector_id_map, id)) return;
+    if (!hm_get_value(db->vector_id_map, id, &index)) return false;
+    // Validate the map entry before modifying anything.
+    if (index >= db->count ||
+        db->vectors[index] == NULL ||
+        db->vectors[index]->id != id) {
+        return false;
+    }
+
     uint32_t last_index = db->count - 1;
     sevdb_vector *removed = db->vectors[index];
-    if(index != last_index){
-        sevdb_vector* last_vector = db->vectors[last_index];
+    if (index != last_index) {
+        sevdb_vector *last_vector = db->vectors[last_index];
+        if (last_vector == NULL) {
+            return false;
+        }
+        // Update the last vector's index before modifying the array.
+        if (!hm_update_value(
+                db->vector_id_map, last_vector->id, index)) {
+            return false;
+        }
+        // Remove the target ID. If this fails, roll back the index.
+        if (!hm_remove(db->vector_id_map, id)) {
+            bool rollback_ok = hm_update_value(
+                db->vector_id_map, last_vector->id, last_index);
+            // Failure here indicates a broken internal invariant.
+            assert(rollback_ok);
+            (void)rollback_ok;
+            return false;
+        }
         db->vectors[index] = last_vector;
-        hm_update_value(db->vector_id_map, last_vector->id, index);
+    } else {
+        // Removing the last element requires no index update.
+        if (!hm_remove(db->vector_id_map, id)) {
+            return false;
+        }
     }
     db->vectors[last_index] = NULL;
-    sevdb_vector_destroy(removed);
     db->count--;
+    sevdb_vector_destroy(removed);
+    return true;
 }
 
 static bool is_max_heap(float a, float b) { return a > b; }

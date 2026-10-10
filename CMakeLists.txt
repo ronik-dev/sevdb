@@ -3,6 +3,7 @@ project(sevdb VERSION 0.3.0 LANGUAGES C DESCRIPTION "one small embedded vector d
 
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 
 #-----------------

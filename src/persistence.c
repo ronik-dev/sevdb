@@ -114,6 +114,10 @@ fail:
  *   uint32_t  id
  *   uint32_t  dimensions
  *   float     components[dimensions]
+ * ... Count Other Vectors
+ *
+ * Footer:
+ *   uint32_t  checksum
  */
 sevdb_database* sevdb_db_deserialize_v1(FILE* fp) {
     if (fp == NULL) return NULL;

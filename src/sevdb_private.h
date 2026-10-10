@@ -12,5 +12,5 @@ struct sevdb_database{
     uint32_t capacity;          //how many vector can the db store
     uint32_t count;             //how many vector are currently stored
     sevdb_vector **vectors;     //array of vectors (pointer to the first)
-    hashmap *vector_id_map;  //hash map to assotiate vector indexes to their position in the db
+    hashmap *vector_id_map;     //hash map to assotiate vector indexes to their position in the db
 };

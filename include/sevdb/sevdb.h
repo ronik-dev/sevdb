@@ -95,8 +95,10 @@ sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id);
  * 
  * @param db Pointer to the database instance.
  * @param id The identifier of the vector to remove.
+ *
+ * @return True on success, False if file operations fail.
  */
-void sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
+bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
 
 /**
  * @brief Performs a Top-K similarity search using Cosine Similarity.

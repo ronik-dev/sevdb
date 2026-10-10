@@ -1,2 +1,6 @@
 #build directory
 build/
+build-host/
+
+#compile commands
+compile_commands.json
