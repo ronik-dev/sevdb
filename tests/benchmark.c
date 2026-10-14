@@ -18,8 +18,8 @@ int main(void) {
         vector_dimension
     );
 
-    sevdb_database *db = sevdb_db_create(vector_number);
-    if (db == NULL) {
+    sevdb_database *db = NULL;
+    if (sevdb_db_create(vector_number, &db) != SEVDB_OK) {
         printf("Failed to create DB\n");
         return 1;
     }
@@ -49,14 +49,13 @@ int main(void) {
             ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
     }
 
-    sevdb_vector *vector_to_compare =
-        sevdb_vector_create(
+    sevdb_vector *vector_to_compare = NULL;
+    if (sevdb_vector_create(
             999999,
             vector_dimension,
-            search_components
-        );
-
-    if (vector_to_compare == NULL) {
+            search_components,
+            &vector_to_compare
+        ) != SEVDB_OK) {
         printf("Failed to create search vector\n");
         free(input_components);
         free(search_components);
@@ -73,14 +72,14 @@ int main(void) {
                 ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
         }
 
-        sevdb_vector *v =
-            sevdb_vector_create(
+        sevdb_vector *v = NULL;
+        if (sevdb_vector_create(
                 (uint32_t)i,
                 vector_dimension,
-                input_components
-            );
-
-        if (v == NULL || sevdb_db_push_vector(db, v) == NULL) {
+                input_components,
+                &v
+            ) != SEVDB_OK || sevdb_db_push_vector(db, v) != SEVDB_OK) {
+            
             printf("Failed to push vector %d\n", i);
 
             /*
@@ -100,18 +99,26 @@ int main(void) {
     }
 
     sevdb_similarity_scored_vector out_results[5] = {0};
+    int vectors_found = 0;
 
     printf("Starting search...\n");
 
     clock_t start = clock();
 
-    int vectors_found =
-        sevdb_db_search_k_similar_vectors(
+    if (sevdb_db_search_k_similar_vectors(
             db,
             vector_to_compare,
             k,
+            &vectors_found,
             out_results
-        );
+        ) != SEVDB_OK) {
+        printf("Search operation failed internally.\n");
+        sevdb_vector_destroy(vector_to_compare);
+        free(input_components);
+        free(search_components);
+        sevdb_db_destroy(db);
+        return 1;
+    }
 
     clock_t end = clock();
 

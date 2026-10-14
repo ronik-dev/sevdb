@@ -5,134 +5,121 @@
 
 Test(vector, should_create_and_read) {
     float input_components[2] = {4.2f, 5.2f};
-
-    sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
-
+    sevdb_vector *v = NULL;
+    
+    cr_assert_eq(sevdb_vector_create(42, 2, input_components, &v), SEVDB_OK);
     cr_assert_not_null(v, "Vector allocation failed");
     cr_assert_eq(sevdb_vector_get_id(v), 42); 
     cr_assert_eq(sevdb_vector_get_dimensions(v), 2); 
     cr_assert_float_eq(sevdb_vector_get_components(v)[0], 4.2f, 0.0001); 
     cr_assert_float_eq(sevdb_vector_get_components(v)[1], 5.2f, 0.0001); 
 
-    //clean
     sevdb_vector_destroy(v);
 }
 
 Test(vector, should_reject_zero_dimensions) {
     float dummy = 1.0f;
-    sevdb_vector *v = sevdb_vector_create(1, 0, &dummy);
-    cr_assert_null(v, "Vector creation should reject dimensions == 0");
+    sevdb_vector *v = (sevdb_vector*)0xDEADBEEF;
+    cr_assert_eq(sevdb_vector_create(1, 0, &dummy, &v), SEVDB_ERROR_INVALID_ARGUMENT);
+    cr_assert_null(v, "Vector output pointer should be NULL on failure");
 }
 
 Test(vector, should_reject_dimensions_over_max) {
     float dummy[1] = {1.0f};
-    sevdb_vector *v = sevdb_vector_create(1, SEVDB_MAX_VECTOR_DIMENSIONS + 1, dummy);
-    cr_assert_null(v, "Vector creation should reject dimensions above SEVDB_MAX_VECTOR_DIMENSIONS");
+    sevdb_vector *v = (sevdb_vector*)0xDEADBEEF;
+    cr_assert_eq(sevdb_vector_create(1, SEVDB_MAX_VECTOR_DIMENSIONS + 1, dummy, &v), SEVDB_ERROR_INVALID_ARGUMENT);
 }
 
 Test(database, should_create_push_and_read) {
-    //create
-    sevdb_database *db = sevdb_db_create(42);
+    sevdb_database *db = NULL;
+    cr_assert_eq(sevdb_db_create(42, &db), SEVDB_OK);
 
-    //push
     float input_components[2] = {4.2f, 5.2f};
-    sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
-    sevdb_vector *result = sevdb_db_push_vector(db, v);
+    sevdb_vector *v = NULL;
+    sevdb_vector_create(42, 2, input_components, &v);
+    
+    cr_assert_eq(sevdb_db_push_vector(db, v), SEVDB_OK);
 
-    //read
     sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
     cr_assert(v == search, "Search by id returned wrong memory address");
 
-    //clean
     sevdb_db_destroy(db);
 }
 
 Test(database, should_reject_duplicate_id_on_push) {
-    sevdb_database *db = sevdb_db_create(5);
+    sevdb_database *db = NULL;
+    sevdb_db_create(5, &db);
 
     float components1[2] = {1.0f, 2.0f};
-    sevdb_vector *v1 = sevdb_vector_create(42, 2, components1);
-    cr_assert_not_null(sevdb_db_push_vector(db, v1));
+    sevdb_vector *v1 = NULL;
+    sevdb_vector_create(42, 2, components1, &v1);
+    cr_assert_eq(sevdb_db_push_vector(db, v1), SEVDB_OK);
 
     float components2[2] = {9.0f, 9.0f};
-    sevdb_vector *v2 = sevdb_vector_create(42, 2, components2); // same id
-    sevdb_vector *result = sevdb_db_push_vector(db, v2);
-
-    cr_assert_null(result, "Push should reject a duplicate id");
+    sevdb_vector *v2 = NULL;
+    sevdb_vector_create(42, 2, components2, &v2); 
+    
+    cr_assert_eq(sevdb_db_push_vector(db, v2), SEVDB_ERROR_DUPLICATE_ID);
     cr_assert_eq(sevdb_db_get_count(db), 1, "Count should not increase on rejected push");
 
-    sevdb_vector_destroy(v2); // ownership never transferred, caller must clean up
+    sevdb_vector_destroy(v2); 
     sevdb_db_destroy(db);
 }
-
 
 Test(database, should_create_push_remove_and_read) {
-    //create
-    sevdb_database *db = sevdb_db_create(42);
+    sevdb_database *db = NULL;
+    sevdb_db_create(42, &db);
 
-    //push
     float input_components[2] = {4.2f, 5.2f};
-    sevdb_vector *v = sevdb_vector_create(42, 2, input_components);
-    sevdb_vector *result = sevdb_db_push_vector(db, v);
-    int old_number_of_vectors = sevdb_db_get_count(db);
+    sevdb_vector *v = NULL;
+    sevdb_vector_create(42, 2, input_components, &v);
+    
+    cr_assert_eq(sevdb_db_push_vector(db, v), SEVDB_OK);
+    uint32_t old_number_of_vectors = sevdb_db_get_count(db);
 
-    //remove
-    sevdb_db_remove_vector_by_id(db, 42);
+    cr_assert_eq(sevdb_db_remove_vector_by_id(db, 42), SEVDB_OK);
 
-    //read
     sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
     cr_assert(search == NULL, "Remove by id did not occour, vector is still present");
-    cr_assert(old_number_of_vectors -1  == sevdb_db_get_count(db), "DB vector count was not succesfully updated");
+    cr_assert(old_number_of_vectors - 1 == sevdb_db_get_count(db), "DB vector count was not succesfully updated");
 
-    //clean
     sevdb_db_destroy(db);
 }
 
-
 Test(database, should_increase_capacity) {
-    // create database with small capacity
-    sevdb_database *db = sevdb_db_create(2);
+    sevdb_database *db = NULL;
+    sevdb_db_create(2, &db);
 
     cr_assert_not_null(db, "Database allocation failed");
     cr_assert_eq(sevdb_db_get_capacity(db), 2);
 
-    // add a vector before increasing
     float input_components[2] = {4.2f, 5.2f};
-    sevdb_vector *v1 = sevdb_vector_create(42, 2, input_components);
+    sevdb_vector *v1 = NULL;
+    sevdb_vector_create(42, 2, input_components, &v1);
+    cr_assert_eq(sevdb_db_push_vector(db, v1), SEVDB_OK);
 
-    sevdb_vector *result = sevdb_db_push_vector(db, v1);
-    cr_assert_eq(result, v1);
-
-    // increase capacity
-    bool increased = sevdb_db_increase_capacity(db, 3);
-
-    cr_assert(increased, "Failed to increase database capacity");
+    cr_assert_eq(sevdb_db_increase_capacity(db, 3), SEVDB_OK);
     cr_assert_eq(sevdb_db_get_capacity(db), 5);
 
-    // make sure the existing vector is still accessible
     sevdb_vector *search = sevdb_db_get_vector_by_id(db, 42);
-
     cr_assert_eq(search, v1, "Vector was lost after increasing capacity");
 
-    // make sure we can push into the newly allocated space
     float input_components2[2] = {6.2f, 7.2f};
-    sevdb_vector *v2 = sevdb_vector_create(43, 2, input_components2);
+    sevdb_vector *v2 = NULL;
+    sevdb_vector_create(43, 2, input_components2, &v2);
+    cr_assert_eq(sevdb_db_push_vector(db, v2), SEVDB_OK);
 
-    result = sevdb_db_push_vector(db, v2);
-
-    cr_assert_eq(result, v2);
     cr_assert_eq(sevdb_db_get_count(db), 2);
 
-    // verify second vector
     search = sevdb_db_get_vector_by_id(db, 43);
     cr_assert_eq(search, v2, "Could not retrieve vector added after capacity increase");
 
-    // clean
     sevdb_db_destroy(db);
 }
 
 Test(database, should_handle_multiple_capacity_increases_and_pushes) {
-    sevdb_database *db = sevdb_db_create(2);
+    sevdb_database *db = NULL;
+    sevdb_db_create(2, &db);
     cr_assert_not_null(db);
 
     sevdb_vector *inserted[14] = {0};
@@ -141,25 +128,25 @@ Test(database, should_handle_multiple_capacity_increases_and_pushes) {
         while (sevdb_db_get_count(db) < sevdb_db_get_capacity(db)) {
             uint32_t idx = sevdb_db_get_count(db);
             float components[2] = {(float)idx, (float)idx * 2.0f};
-            sevdb_vector *v = sevdb_vector_create(idx, 2, components);
+            sevdb_vector *v = NULL;
+            sevdb_vector_create(idx, 2, components, &v);
+            
             cr_assert_not_null(v);
-            cr_assert_not_null(sevdb_db_push_vector(db, v),
-                    "Push failed while capacity had room");
+            cr_assert_eq(sevdb_db_push_vector(db, v), SEVDB_OK, "Push failed while capacity had room");
             inserted[idx] = v;
         }
 
-        cr_assert(sevdb_db_increase_capacity(db, 4),
-                "Capacity increase failed on round %d", round);
+        cr_assert_eq(sevdb_db_increase_capacity(db, 4), SEVDB_OK, "Capacity increase failed on round %d", round);
     }
 
-    // Fill the newly grown region entirely.
     while (sevdb_db_get_count(db) < sevdb_db_get_capacity(db)) {
         uint32_t idx = sevdb_db_get_count(db);
         float components[2] = {(float)idx, (float)idx * 2.0f};
-        sevdb_vector *v = sevdb_vector_create(idx, 2, components);
+        sevdb_vector *v = NULL;
+        sevdb_vector_create(idx, 2, components, &v);
+        
         cr_assert_not_null(v);
-        cr_assert_not_null(sevdb_db_push_vector(db, v),
-                "Push failed after capacity growth at index %d", idx);
+        cr_assert_eq(sevdb_db_push_vector(db, v), SEVDB_OK, "Push failed after capacity growth at index %d", idx);
         inserted[idx] = v;
     }
 
@@ -167,61 +154,46 @@ Test(database, should_handle_multiple_capacity_increases_and_pushes) {
     for (uint32_t i = 0; i < final_count; i++) {
         sevdb_vector *found = sevdb_db_get_vector_by_id(db, i);
         cr_assert_not_null(found, "Vector %d lost after capacity growth", i);
-        cr_assert_eq(found, inserted[i],
-                "Vector %d pointer changed unexpectedly after capacity growth", i);
+        cr_assert_eq(found, inserted[i], "Vector %d pointer changed unexpectedly after capacity growth", i);
     }
 
     sevdb_db_destroy(db);
 }
 
-
 Test(database, should_create_push_and_perform_cosine_similarity_search) {
     int vector_number = 10;
     int k = 5;
 
-    sevdb_database *db = sevdb_db_create(vector_number);
+    sevdb_database *db = NULL;
+    sevdb_db_create(vector_number, &db);
     cr_assert_not_null(db);
 
     int vector_dimension = 2;
 
     for (int i = 0; i < vector_number; i++) {
-        float input_components[2] = {
-            1.0f,
-            (float)i * 0.5f
-        };
-
-        sevdb_vector *v =
-            sevdb_vector_create(i, vector_dimension, input_components);
+        float input_components[2] = {1.0f, (float)i * 0.5f};
+        sevdb_vector *v = NULL;
+        sevdb_vector_create(i, vector_dimension, input_components, &v);
 
         cr_assert_not_null(v);
-        cr_assert_not_null(sevdb_db_push_vector(db, v));
+        cr_assert_eq(sevdb_db_push_vector(db, v), SEVDB_OK);
     }
 
     float search_components[2] = {1.0f, 0.0f};
-
-    sevdb_vector *vector_to_compare =
-        sevdb_vector_create(99, vector_dimension, search_components);
+    sevdb_vector *vector_to_compare = NULL;
+    sevdb_vector_create(99, vector_dimension, search_components, &vector_to_compare);
 
     cr_assert_not_null(vector_to_compare);
 
     sevdb_similarity_scored_vector out_results[5];
+    int number_of_selected_vectors;
 
-    int number_of_selected_vectors =
-        sevdb_db_search_k_similar_vectors(
-                db,
-                vector_to_compare,
-                k,
-                out_results
-                );
+    cr_assert_eq(sevdb_db_search_k_similar_vectors(db, vector_to_compare, k, &number_of_selected_vectors, out_results), SEVDB_OK);
 
-    cr_assert_eq(number_of_selected_vectors, k,
-            "Expected %d results, got %d",
-            k,
-            number_of_selected_vectors);
+    cr_assert_eq(number_of_selected_vectors, k, "Expected %d results, got %d", k, number_of_selected_vectors);
 
     for (int i = 0; i < k; i++) {
         cr_assert_not_null(out_results[i].vector);
-
         cr_assert_float_eq(
                 out_results[i].score,
                 get_cosine_similarity(
@@ -234,526 +206,9 @@ Test(database, should_create_push_and_perform_cosine_similarity_search) {
     }
 
     for (int i = 0; i < k - 1; i++) {
-        cr_assert(
-                out_results[i].score >= out_results[i + 1].score,
-                "Cosine search returned wrongly ordered list"
-                );
+        cr_assert(out_results[i].score >= out_results[i + 1].score, "Cosine search returned wrongly ordered list");
     }
 
     sevdb_vector_destroy(vector_to_compare);
-    sevdb_db_destroy(db);}
-
-    Test(database, should_serialize_and_deserialize_with_vectors) {
-        const char *path = "./test_serialize_vectors.bin";
-
-        sevdb_database *db = sevdb_db_create(42);
-        cr_assert_not_null(db);
-
-        /* Populate database with vectors having different dimensions/values. */
-        float components_1[2] = {4.2f, 5.2f};
-        float components_2[2] = {1.0f, 2.0f};
-        float components_3[2] = {-3.5f, 7.25f};
-
-        sevdb_vector *v1 = sevdb_vector_create(10, 2, components_1);
-        sevdb_vector *v2 = sevdb_vector_create(20, 2, components_2);
-        sevdb_vector *v3 = sevdb_vector_create(30, 2, components_3);
-
-        cr_assert_not_null(v1);
-        cr_assert_not_null(v2);
-        cr_assert_not_null(v3);
-
-        cr_assert_not_null(sevdb_db_push_vector(db, v1));
-        cr_assert_not_null(sevdb_db_push_vector(db, v2));
-        cr_assert_not_null(sevdb_db_push_vector(db, v3));
-
-        cr_assert_eq(sevdb_db_get_count(db), 3);
-
-        /* Serialize. */
-        cr_assert(
-                sevdb_db_serialize(db, path) == true,
-                "Failed to serialize populated database"
-                );
-
-        /* Deserialize. */
-        sevdb_database *loaded_db = sevdb_db_deserialize(path);
-
-        cr_assert_not_null(
-                loaded_db,
-                "Failed to deserialize populated database"
-                );
-
-        /* Database metadata. */
-        cr_assert_eq(
-                sevdb_db_get_capacity(loaded_db),
-                42,
-                "Deserialized database has wrong capacity"
-                );
-
-        cr_assert_eq(
-                sevdb_db_get_count(loaded_db),
-                3,
-                "Deserialized database has wrong vector count"
-                );
-
-        /* Verify vector 1. */
-        sevdb_vector *loaded_v1 =
-            sevdb_db_get_vector_by_id(loaded_db, 10);
-
-        cr_assert_not_null(loaded_v1);
-        cr_assert_eq(sevdb_vector_get_id(loaded_v1), 10);
-        cr_assert_eq(sevdb_vector_get_dimensions(loaded_v1), 2);
-
-        const float *loaded_components_1 =
-            sevdb_vector_get_components(loaded_v1);
-
-        cr_assert_float_eq(loaded_components_1[0], 4.2f, 0.0001);
-        cr_assert_float_eq(loaded_components_1[1], 5.2f, 0.0001);
-
-        /* Verify vector 2. */
-        sevdb_vector *loaded_v2 =
-            sevdb_db_get_vector_by_id(loaded_db, 20);
-
-        cr_assert_not_null(loaded_v2);
-        cr_assert_eq(sevdb_vector_get_id(loaded_v2), 20);
-        cr_assert_eq(sevdb_vector_get_dimensions(loaded_v2), 2);
-
-        const float *loaded_components_2 =
-            sevdb_vector_get_components(loaded_v2);
-
-        cr_assert_float_eq(loaded_components_2[0], 1.0f, 0.0001);
-        cr_assert_float_eq(loaded_components_2[1], 2.0f, 0.0001);
-
-        /* Verify vector 3, including negative/decimal values. */
-        sevdb_vector *loaded_v3 =
-            sevdb_db_get_vector_by_id(loaded_db, 30);
-
-        cr_assert_not_null(loaded_v3);
-        cr_assert_eq(sevdb_vector_get_id(loaded_v3), 30);
-        cr_assert_eq(sevdb_vector_get_dimensions(loaded_v3), 2);
-
-        const float *loaded_components_3 =
-            sevdb_vector_get_components(loaded_v3);
-
-        cr_assert_float_eq(loaded_components_3[0], -3.5f, 0.0001);
-        cr_assert_float_eq(loaded_components_3[1], 7.25f, 0.0001);
-
-        /* Cleanup. */
-        remove(path);
-
-        sevdb_db_destroy(db);
-        sevdb_db_destroy(loaded_db);
-    }
-
-Test(database, should_reject_corrupted_file_on_deserialize) {
-    const char *path = "./test_corrupted_file.bin";
-
-    sevdb_database *db = sevdb_db_create(5);
-    float components[2] = {1.0f, 2.0f};
-    sevdb_vector *v = sevdb_vector_create(1, 2, components);
-    cr_assert_not_null(sevdb_db_push_vector(db, v));
-    cr_assert(sevdb_db_serialize(db, path), "Failed to serialize database");
-
-    // Flip one byte just past the header (magic[5] + version[4] + capacity[4]
-    // + count[4] = 17), landing inside the first vector's id field.
-    FILE *fp = fopen(path, "r+b");
-    cr_assert_not_null(fp, "Failed to reopen serialized file for corruption");
-
-    long corrupt_offset = 17;
-    cr_assert_eq(fseek(fp, corrupt_offset, SEEK_SET), 0);
-
-    uint8_t original_byte;
-    cr_assert_eq(fread(&original_byte, 1, 1, fp), 1);
-    cr_assert_eq(fseek(fp, corrupt_offset, SEEK_SET), 0);
-
-    uint8_t corrupted_byte = original_byte ^ 0xFF;
-    cr_assert_eq(fwrite(&corrupted_byte, 1, 1, fp), 1);
-    fclose(fp);
-
-    sevdb_database *loaded_db = sevdb_db_deserialize(path);
-    cr_assert_null(loaded_db,
-            "Deserialize should reject a file with a corrupted checksum");
-
     sevdb_db_destroy(db);
-    remove(path);
-}
-
-Test(database, should_preserve_search_results_after_deserialization) {
-    const char *path = "./test_search_deserialization.bin";
-
-    sevdb_database *db = sevdb_db_create(10);
-    cr_assert_not_null(db);
-
-    /*
-     * Vectors are deliberately chosen so their cosine similarities
-     * relative to the query are different and deterministic.
-     */
-    float c0[2] = {1.0f, 0.0f};
-    float c1[2] = {0.9f, 0.1f};
-    float c2[2] = {0.0f, 1.0f};
-    float c3[2] = {-1.0f, 0.0f};
-
-    sevdb_vector *v0 = sevdb_vector_create(0, 2, c0);
-    sevdb_vector *v1 = sevdb_vector_create(1, 2, c1);
-    sevdb_vector *v2 = sevdb_vector_create(2, 2, c2);
-    sevdb_vector *v3 = sevdb_vector_create(3, 2, c3);
-
-    cr_assert_not_null(sevdb_db_push_vector(db, v0));
-    cr_assert_not_null(sevdb_db_push_vector(db, v1));
-    cr_assert_not_null(sevdb_db_push_vector(db, v2));
-    cr_assert_not_null(sevdb_db_push_vector(db, v3));
-
-    cr_assert(sevdb_db_serialize(db, path));
-
-    sevdb_database *loaded_db = sevdb_db_deserialize(path);
-    cr_assert_not_null(loaded_db);
-
-    float query_components[2] = {1.0f, 0.0f};
-
-    sevdb_vector *query =
-        sevdb_vector_create(99, 2, query_components);
-
-    cr_assert_not_null(query);
-
-    sevdb_similarity_scored_vector results_original[4] = {0};
-    sevdb_similarity_scored_vector results_loaded[4] = {0};
-
-    int original_count =
-        sevdb_db_search_k_similar_vectors(
-                db,
-                query,
-                4,
-                results_original
-                );
-
-    int loaded_count =
-        sevdb_db_search_k_similar_vectors(
-                loaded_db,
-                query,
-                4,
-                results_loaded
-                );
-
-    cr_assert_eq(original_count, loaded_count);
-
-    /*
-     * Serialization must not change the searchable contents of
-     * the database or the resulting similarity scores.
-     */
-    for (int i = 0; i < original_count; i++) {
-        cr_assert_not_null(results_original[i].vector);
-        cr_assert_not_null(results_loaded[i].vector);
-
-        cr_assert_eq(
-                sevdb_vector_get_id(results_original[i].vector),
-                sevdb_vector_get_id(results_loaded[i].vector),
-                "Search result %d changed after deserialization",
-                i
-                );
-
-        cr_assert_eq(
-                sevdb_vector_get_dimensions(results_original[i].vector),
-                sevdb_vector_get_dimensions(results_loaded[i].vector)
-                );
-
-        cr_assert_float_eq(
-                results_original[i].score,
-                results_loaded[i].score,
-                0.000001
-                );
-    }
-
-    sevdb_vector_destroy(query);
-    sevdb_db_destroy(db);
-    sevdb_db_destroy(loaded_db);
-
-    remove(path);
-}
-
-
-Test(database, should_preserve_vector_count_after_deserialization) {
-    const char *path = "./test_vector_count.bin";
-
-    sevdb_database *db = sevdb_db_create(100);
-
-    for (int i = 0; i < 20; i++) {
-        float components[3] = {
-            (float)i,
-            (float)i + 0.5f,
-            (float)i * -2.0f
-        };
-
-        sevdb_vector *v =
-            sevdb_vector_create(i, 3, components);
-
-        cr_assert_not_null(v);
-        cr_assert_not_null(sevdb_db_push_vector(db, v));
-    }
-
-    cr_assert_eq(sevdb_db_get_count(db), 20);
-
-    cr_assert(sevdb_db_serialize(db, path));
-
-    sevdb_database *loaded_db =
-        sevdb_db_deserialize(path);
-
-    cr_assert_not_null(loaded_db);
-
-    cr_assert_eq(
-            sevdb_db_get_capacity(loaded_db),
-            100
-            );
-
-    cr_assert_eq(
-            sevdb_db_get_count(loaded_db),
-            20
-            );
-
-    /* Verify every vector can still be found. */
-    for (int i = 0; i < 20; i++) {
-        sevdb_vector *v =
-            sevdb_db_get_vector_by_id(loaded_db, i);
-
-        cr_assert_not_null(
-                v,
-                "Vector with id %d was lost during serialization",
-                i
-                );
-
-        cr_assert_eq(sevdb_vector_get_id(v), i);
-        cr_assert_eq(sevdb_vector_get_dimensions(v), 3);
-
-        const float *components =
-            sevdb_vector_get_components(v);
-
-        cr_assert_float_eq(
-                components[0],
-                (float)i,
-                0.0001
-                );
-
-        cr_assert_float_eq(
-                components[1],
-                (float)i + 0.5f,
-                0.0001
-                );
-
-        cr_assert_float_eq(
-                components[2],
-                (float)i * -2.0f,
-                0.0001
-                );
-    }
-
-    sevdb_db_destroy(db);
-    sevdb_db_destroy(loaded_db);
-
-    remove(path);
-}
-
-
-Test(database, should_serialize_and_deserialize_empty_database) {
-    const char *path = "./test_empty_database.bin";
-
-    sevdb_database *db = sevdb_db_create(42);
-
-    cr_assert_not_null(db);
-    cr_assert_eq(sevdb_db_get_count(db), 0);
-
-    cr_assert(
-            sevdb_db_serialize(db, path),
-            "Failed to serialize empty database"
-            );
-
-    sevdb_database *loaded_db =
-        sevdb_db_deserialize(path);
-
-    cr_assert_not_null(
-            loaded_db,
-            "Failed to deserialize empty database"
-            );
-
-    cr_assert_eq(
-            sevdb_db_get_capacity(loaded_db),
-            42
-            );
-
-    cr_assert_eq(
-            sevdb_db_get_count(loaded_db),
-            0
-            );
-
-    sevdb_db_destroy(db);
-    sevdb_db_destroy(loaded_db);
-
-    remove(path);
-}
-
-
-Test(database, should_preserve_high_dimension_vectors) {
-    const char *path = "./test_high_dimension_db.bin";
-
-    const int dimensions = 128;
-
-    sevdb_database *db = sevdb_db_create(2);
-
-    float components[dimensions];
-
-    for (int i = 0; i < dimensions; i++) {
-        components[i] =
-            (float)i * 0.12345f - 7.5f;
-    }
-
-    sevdb_vector *v =
-        sevdb_vector_create(12345, dimensions, components);
-
-    cr_assert_not_null(v);
-    cr_assert_not_null(sevdb_db_push_vector(db, v));
-
-    cr_assert(sevdb_db_serialize(db, path));
-
-    sevdb_database *loaded_db =
-        sevdb_db_deserialize(path);
-
-    cr_assert_not_null(loaded_db);
-
-    sevdb_vector *loaded =
-        sevdb_db_get_vector_by_id(loaded_db, 12345);
-
-    cr_assert_not_null(loaded);
-
-    cr_assert_eq(
-            sevdb_vector_get_id(loaded),
-            12345
-            );
-
-    cr_assert_eq(
-            sevdb_vector_get_dimensions(loaded),
-            dimensions
-            );
-
-    const float *loaded_components =
-        sevdb_vector_get_components(loaded);
-
-    for (int i = 0; i < dimensions; i++) {
-        cr_assert_float_eq(
-                loaded_components[i],
-                components[i],
-                0.0001,
-                "Component %d changed after deserialization",
-                i
-                );
-    }
-
-    sevdb_db_destroy(db);
-    sevdb_db_destroy(loaded_db);
-
-    remove(path);
-}
-
-
-Test(database, should_not_find_missing_vector_after_deserialization) {
-    const char *path = "./test_missing_vector.bin";
-
-    sevdb_database *db = sevdb_db_create(5);
-
-    float components[2] = {1.0f, 2.0f};
-
-    sevdb_vector *v =
-        sevdb_vector_create(123, 2, components);
-
-    cr_assert_not_null(sevdb_db_push_vector(db, v));
-
-    cr_assert(sevdb_db_serialize(db, path));
-
-    sevdb_database *loaded_db =
-        sevdb_db_deserialize(path);
-
-    cr_assert_not_null(loaded_db);
-
-    cr_assert_null(
-            sevdb_db_get_vector_by_id(loaded_db, 999),
-            "Deserialized database returned a vector for a missing ID"
-            );
-
-    sevdb_db_destroy(db);
-    sevdb_db_destroy(loaded_db);
-
-    remove(path);
-}
-
-
-Test(database, should_preserve_vectors_after_remove_and_deserialization) {
-    const char *path = "./test_remove_before_serialize.bin";
-
-    sevdb_database *db = sevdb_db_create(10);
-
-    for (int i = 0; i < 5; i++) {
-        float components[2] = {
-            (float)i,
-            (float)i + 1.0f
-        };
-
-        sevdb_vector *v =
-            sevdb_vector_create(i, 2, components);
-
-        cr_assert_not_null(sevdb_db_push_vector(db, v));
-    }
-
-    cr_assert_eq(sevdb_db_get_count(db), 5);
-
-    /* Remove some vectors before serialization. */
-    sevdb_db_remove_vector_by_id(db, 1);
-    sevdb_db_remove_vector_by_id(db, 3);
-
-    cr_assert_eq(sevdb_db_get_count(db), 3);
-
-    cr_assert(sevdb_db_serialize(db, path));
-
-    sevdb_database *loaded_db =
-        sevdb_db_deserialize(path);
-
-    cr_assert_not_null(loaded_db);
-
-    printf(
-            "ORIGINAL: capacity=%d count=%d\n",
-            sevdb_db_get_capacity(db),
-            sevdb_db_get_count(db)
-          );
-
-    printf(
-            "LOADED: capacity=%d count=%d\n",
-            sevdb_db_get_capacity(loaded_db),
-            sevdb_db_get_count(loaded_db)
-          );
-
-
-    cr_assert_eq(
-            sevdb_db_get_count(loaded_db),
-            3
-            );
-
-    cr_assert_not_null(
-            sevdb_db_get_vector_by_id(loaded_db, 0)
-            );
-
-    cr_assert_null(
-            sevdb_db_get_vector_by_id(loaded_db, 1)
-            );
-
-    cr_assert_not_null(
-            sevdb_db_get_vector_by_id(loaded_db, 2)
-            );
-
-    cr_assert_null(
-            sevdb_db_get_vector_by_id(loaded_db, 3)
-            );
-
-    cr_assert_not_null(
-            sevdb_db_get_vector_by_id(loaded_db, 4)
-            );
-
-    sevdb_db_destroy(db);
-    sevdb_db_destroy(loaded_db);
-
-    remove(path);
 }

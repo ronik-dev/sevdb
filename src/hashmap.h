@@ -19,25 +19,29 @@ typedef struct hm_element {
 /**
  * @struct hashmap
  * @brief A linear-probing hash map for storing key-value pairs in O(1) average time.
- * 
- * @var hashmap::capacity The total number of allocated slots in the hash map.
- * @var hashmap::count The number of active elements currently stored.
- * @var hashmap::elements Pointer to the contiguous array of hm_element slots.
  */
-typedef struct hashmap {
-    uint32_t capacity;
-    uint32_t count;
-    hm_element *elements;
-} hashmap;
+typedef struct hashmap hashmap;
+
+typedef enum hm_state {
+    HM_OK = 0,                      //Operation succeded :)
+
+    HM_ERROR_INVALID_ARGUMENT,      //Function called with unacceptable :( argument, try again.
+    HM_ERROR_FULL,                  //Hash map has reached it maximum capacity
+    HM_ERROR_DUPLICATE_KEY,         //Tryed to make an operation that would result in duplicate keys (not permitted)
+    HM_ERROR_NOT_FOUND,             //Tryed to make an operation on an unexisting key
+    HM_ERROR_OUT_OF_MEMORY,         //We have run out of memory :¬|
+    HM_ERROR_INCONSISTENT_STATE     //CRITICAL! We reached an uncosistent state
+} hm_state;
 
 /**
  * @brief Allocates and initializes a new hash map.
  * 
  * @param capacity The initial number of slots to allocate (must be > 0).
- * @return A pointer to the newly allocated hash map, or NULL if allocation fails.
+ * @param out_result Pointer to a variable where the newly allocated hash map will be written.
+ * @return hm_state HM_OK if the operation succeeded, or a specific error code (e.g., HM_ERROR_OUT_OF_MEMORY).
  * @note The returned hash map is allocated on the heap and must be freed using hm_destroy.
  */
-hashmap* hm_create(uint32_t capacity);
+hm_state hm_create(uint32_t capacity, hashmap** out_result);
 
 /**
  * @brief Safely destroys the hash map and frees all associated memory.
@@ -55,9 +59,9 @@ bool hm_destroy(hashmap *hm);
  * @param hm Pointer to the hash map.
  * @param key The unique key to insert.
  * @param value The value to associate with the key.
- * @return true on successful insertion, false if the key already exists or memory allocation fails.
+ * @return hm_state HM_OK if the operation succeeded, HM_ERROR_DUPLICATE_KEY if it already exists, or other error codes.
  */
-bool hm_insert_new(hashmap* hm, uint32_t key, uint32_t value);
+hm_state hm_insert_new(hashmap* hm, uint32_t key, uint32_t value);
 
 /**
  * @brief Updates the value of an existing key in the hash map.
@@ -65,9 +69,9 @@ bool hm_insert_new(hashmap* hm, uint32_t key, uint32_t value);
  * @param hm Pointer to the hash map.
  * @param key The key whose value should be updated.
  * @param value The new value to assign.
- * @return true if the update was successful, false if the key was not found.
+ * @return hm_state HM_OK if the operation succeeded, or HM_ERROR_NOT_FOUND if the key does not exist.
  */
-bool hm_update_value(hashmap* hm, uint32_t key, uint32_t value);
+hm_state hm_update_value(hashmap* hm, uint32_t key, uint32_t value);
 
 /**
  * @brief Checks if a specific key is present in the hash map.
@@ -84,9 +88,9 @@ bool hm_contains_key(const hashmap* hm, uint32_t key);
  * @param hm Pointer to the hash map.
  * @param key The key to search for.
  * @param out_value Pointer to a variable where the found value will be written.
- * @return true if the key was found and out_value populated, false if the key is missing.
+ * @return hm_state HM_OK if the operation succeeded, or HM_ERROR_NOT_FOUND.
  */
-bool hm_get_value(const hashmap* hm, uint32_t key, uint32_t *out_value);
+hm_state hm_get_value(const hashmap* hm, uint32_t key, uint32_t *out_value);
 
 /**
  * @brief Removes an element from the hash map.
@@ -95,6 +99,26 @@ bool hm_get_value(const hashmap* hm, uint32_t key, uint32_t *out_value);
  * 
  * @param hm Pointer to the hash map.
  * @param key The key of the element to remove.
- * @return true if the element was successfully found and removed, false if the key is missing.
+ * @return hm_state HM_OK if the operation succeeded, or HM_ERROR_NOT_FOUND.
  */
-bool hm_remove(hashmap* hm, uint32_t key);
+hm_state hm_remove(hashmap* hm, uint32_t key);
+
+/**
+ * @brief Get hashmap capacity
+ * 
+ * @param hm Pointer to the hash map.
+ * @param out_result Pointer to a variable where the retrieved capacity will be written.
+ * @return true if the operation was successful, and the result got saved in out_result.
+ *         false if the operation was not successful (e.g., NULL pointer).
+ */
+bool hm_get_capacity(const hashmap* hm, uint32_t* out_result);
+
+/**
+ * @brief Get hashmap current count
+ * 
+ * @param hm Pointer to the hash map.
+ * @param out_result Pointer to a variable where the retrieved count will be written.
+ * @return true if the operation was successful, and the result got saved in out_result.
+ *         false if the operation was not successful (e.g., NULL pointer).
+ */
+bool hm_get_count(const hashmap* hm, uint32_t* out_result);

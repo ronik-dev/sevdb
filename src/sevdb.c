@@ -14,16 +14,23 @@
 //--VECTOR--
 //----------
 
-sevdb_vector* sevdb_vector_create(uint32_t id, uint32_t dimensions ,const float* components){
-    if (dimensions == 0 || components == NULL || dimensions > SEVDB_MAX_VECTOR_DIMENSIONS) return NULL;
+sevdb_state sevdb_vector_create(uint32_t id, uint32_t dimensions, const float *components, sevdb_vector** result){
+    if (result == NULL) return SEVDB_ERROR_INVALID_ARGUMENT;
+    *result = NULL;
+    if (dimensions == 0 
+        || components == NULL 
+        || dimensions > SEVDB_MAX_VECTOR_DIMENSIONS) {
+        return SEVDB_ERROR_INVALID_ARGUMENT;
+    }
     size_t components_size = sizeof(float)*dimensions;
     size_t total_size = sizeof(sevdb_vector) + components_size;
     sevdb_vector *v = malloc(total_size);
-    if (v == NULL) return NULL;
+    if (v == NULL) return SEVDB_ERROR_OUT_OF_MEMORY;
     v->id = id; 
     v->dimensions = dimensions; 
     memcpy(v->components, components, components_size);
-    return v;
+    *result = v; 
+    return SEVDB_OK;
 }
 
 void sevdb_vector_destroy(sevdb_vector *v){
@@ -51,24 +58,37 @@ const float* sevdb_vector_get_components(const sevdb_vector *v){
 //--DATABASE--
 //------------
 
-sevdb_database* sevdb_db_create(uint32_t capacity){
-    if(capacity == 0) return NULL;
+sevdb_state sevdb_db_create(uint32_t capacity, sevdb_database **result){
+    if (capacity == 0 || result == NULL) return SEVDB_ERROR_INVALID_ARGUMENT;
+    *result = NULL;
     sevdb_database *db = malloc(sizeof(sevdb_database));
-    if (db == NULL) return NULL;
+    if (db == NULL) return SEVDB_ERROR_OUT_OF_MEMORY;
     db->capacity = capacity;
     db->count = 0;
     db->vectors = calloc(capacity, sizeof(sevdb_vector*));
     if (db->vectors == NULL){
         free(db);
-        return NULL;
+        return SEVDB_ERROR_OUT_OF_MEMORY;
     }
-    db->vector_id_map = hm_create(capacity);
+    hashmap* hm = NULL;
+    switch(hm_create(capacity,&hm)){
+        case HM_OK:
+              break;
+        case HM_ERROR_OUT_OF_MEMORY:
+            free(db);
+            return SEVDB_ERROR_OUT_OF_MEMORY;
+        default:
+            free(db);
+            return SEVDB_ERROR_INTERNAL;
+    }
+    db->vector_id_map = hm;
     if (db->vector_id_map == NULL){
         free(db->vectors);
         free(db);
-        return NULL;
+        return SEVDB_ERROR_INTERNAL;
     }
-    return db;
+    *result = db;
+    return SEVDB_OK;
 }
 
 void sevdb_db_destroy(sevdb_database *db){
@@ -86,19 +106,22 @@ void sevdb_db_destroy(sevdb_database *db){
 }
 
 
-bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase){
-    if (db == NULL || increase == 0) return false;
-    uint64_t new_capacity = db->capacity + increase;
-    if (new_capacity > UINT32_MAX) return false;
+sevdb_state sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase){
+    if (db == NULL || increase == 0) return SEVDB_ERROR_INVALID_ARGUMENT;
+    uint64_t new_capacity = (uint64_t)db->capacity + increase;
+    if (new_capacity > UINT32_MAX) return SEVDB_ERROR_INVALID_ARGUMENT;
 
+    if ((size_t)new_capacity > SIZE_MAX / sizeof(*db->vectors)) {
+        return SEVDB_ERROR_OVERFLOW;
+    }
     size_t new_size = new_capacity * sizeof(sevdb_vector*);
     sevdb_vector** temp = realloc(db->vectors, new_size);
-    if (temp == NULL) return false;
+    if (temp == NULL) return SEVDB_ERROR_OUT_OF_MEMORY;
     memset(temp + db->capacity, 0,(new_capacity - db->capacity) * sizeof(sevdb_vector*));
 
     db->capacity = (uint32_t)new_capacity;
-     db->vectors = temp; 
-    return true;
+    db->vectors = temp; 
+    return SEVDB_OK;
 }
 
 uint32_t sevdb_db_get_capacity(const sevdb_database *db){
@@ -111,110 +134,144 @@ uint32_t sevdb_db_get_count(const sevdb_database *db){
     return db->count;
 }
 
-sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
-    if (db == NULL || v == NULL) return NULL;
-    if (db->count >= db->capacity) return NULL;
+sevdb_state sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v){
+    if (db == NULL || v == NULL) return SEVDB_ERROR_INVALID_ARGUMENT;
+    if (db->count >= db->capacity) return SEVDB_ERROR_DATABASE_FULL;
     if (hm_contains_key(db->vector_id_map, v->id)) {
-        return NULL;
+        return SEVDB_ERROR_DUPLICATE_ID;
     }
     uint32_t target_index = db->count;
+    switch(hm_insert_new(db->vector_id_map, v->id, target_index)){
+        case HM_OK:
+            break;
+        case HM_ERROR_DUPLICATE_KEY:
+            return SEVDB_ERROR_DUPLICATE_ID;
+        case HM_ERROR_OUT_OF_MEMORY:
+            return SEVDB_ERROR_OUT_OF_MEMORY;
+        case HM_ERROR_INVALID_ARGUMENT:
+        default:
+            return SEVDB_ERROR_INTERNAL;
+    }
     db->vectors[target_index] = v;
     db->count++;
-    if (!hm_insert_new(db->vector_id_map, v->id, target_index)) {
-        db->vectors[target_index] = NULL;
-        db->count--;
-        return NULL;
-    }
-    return v;
+    return SEVDB_OK;
 }
 
 sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id){
     if (db == NULL || db->count == 0) return NULL;
     uint32_t index; 
-    if(hm_get_value(db->vector_id_map, id, &index)){
-        sevdb_vector *v = db->vectors[index];
-        if (v != NULL && v->id == id){
-            return v; 
-        }
+    switch(hm_get_value(db->vector_id_map, id, &index)){
+        case HM_OK:
+            break;
+        case HM_ERROR_NOT_FOUND:
+        case HM_ERROR_INVALID_ARGUMENT:
+        default:
+            return NULL;
+    }
+    if (index >= db->count) return NULL;
+    sevdb_vector *v = db->vectors[index];
+    if (v != NULL && v->id == id){
+        return v; 
     }
     return NULL;
 }
 
-//bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
-//    if (db == NULL || db->count == 0) false;
-//    uint32_t index;
-//    if(!hm_get_value(db->vector_id_map, id, &index)) false;
-//    if(!hm_remove(db->vector_id_map, id)) false;
-//    uint32_t last_index = db->count - 1;
-//    sevdb_vector *removed = db->vectors[index];
-//    if(index != last_index){
-//        sevdb_vector* last_vector = db->vectors[last_index];
-//        db->vectors[index] = last_vector;
-//        hm_update_value(db->vector_id_map, last_vector->id, index);
-//    }
-//    db->vectors[last_index] = NULL;
-//    sevdb_vector_destroy(removed);
-//    db->count--;
-//}
-bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
-    if (db == NULL || db->count == 0) return false;
+sevdb_state sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id){
+    if (db == NULL) return SEVDB_ERROR_INVALID_ARGUMENT;
+    if (db->count == 0) return SEVDB_ERROR_NOT_FOUND;
     uint32_t index;
-    if (!hm_get_value(db->vector_id_map, id, &index)) return false;
+    
+    switch(hm_get_value(db->vector_id_map, id, &index)){
+        case HM_OK:
+            break;
+        case HM_ERROR_NOT_FOUND:
+            return SEVDB_ERROR_NOT_FOUND;
+        case HM_ERROR_INVALID_ARGUMENT:
+        default:
+            return SEVDB_ERROR_INTERNAL;
+    }
+    
     // Validate the map entry before modifying anything.
     if (index >= db->count ||
         db->vectors[index] == NULL ||
         db->vectors[index]->id != id) {
-        return false;
+        return SEVDB_ERROR_INTERNAL;
     }
 
     uint32_t last_index = db->count - 1;
     sevdb_vector *removed = db->vectors[index];
+    
     if (index != last_index) {
         sevdb_vector *last_vector = db->vectors[last_index];
         if (last_vector == NULL) {
-            return false;
+            return SEVDB_ERROR_INTERNAL;
         }
+        
         // Update the last vector's index before modifying the array.
-        if (!hm_update_value(
-                db->vector_id_map, last_vector->id, index)) {
-            return false;
+        switch(hm_update_value(db->vector_id_map, last_vector->id, index)) {
+            case HM_OK:
+                break;
+            case HM_ERROR_INVALID_ARGUMENT:
+            default:
+                return SEVDB_ERROR_INTERNAL;
         }
+        
         // Remove the target ID. If this fails, roll back the index.
-        if (!hm_remove(db->vector_id_map, id)) {
-            bool rollback_ok = hm_update_value(
-                db->vector_id_map, last_vector->id, last_index);
-            // Failure here indicates a broken internal invariant.
-            assert(rollback_ok);
-            (void)rollback_ok;
-            return false;
+        switch(hm_remove(db->vector_id_map, id)) {
+            case HM_OK:
+                break;
+            default:
+                hm_state rollback_ok = hm_update_value(db->vector_id_map, last_vector->id, last_index);
+                // Failure here indicates a broken internal invariant.
+                assert(rollback_ok == HM_OK); 
+                (void)rollback_ok;
+                return SEVDB_ERROR_INTERNAL;
         }
         db->vectors[index] = last_vector;
     } else {
-        // Removing the last element requires no index update.
-        if (!hm_remove(db->vector_id_map, id)) {
-            return false;
+        if (hm_remove(db->vector_id_map, id) != HM_OK) {
+            return SEVDB_ERROR_INTERNAL;
         }
     }
+    
     db->vectors[last_index] = NULL;
     db->count--;
     sevdb_vector_destroy(removed);
-    return true;
+    
+    return SEVDB_OK;
 }
 
 static bool is_max_heap(float a, float b) { return a > b; }
 static bool is_min_heap(float a, float b) { return a < b; }
 
-int sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v, int k, sevdb_similarity_scored_vector* out_results){
-    if (db == NULL || db->count == 0 || v == NULL || out_results == NULL) return 0;
+sevdb_state sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v, int k, int* out_result_count, sevdb_similarity_scored_vector* out_results){
+    if (db == NULL || v == NULL || out_results == NULL || out_result_count == NULL) return SEVDB_ERROR_INVALID_ARGUMENT;
+    if (k<=0) return SEVDB_ERROR_INVALID_ARGUMENT;
+    if (db->count == 0){
+        *out_result_count = 0;
+        return SEVDB_OK;
+    }
 
-    pqueue* pq = pq_create(k, is_min_heap);
-    if (pq == NULL) return 0;
+    pqueue* pq;
+    switch(pq_create(k, is_min_heap, &pq)){
+        case PQ_OK:
+            break;
+        case PQ_ERROR_OUT_OF_MEMORY:
+            return SEVDB_ERROR_OUT_OF_MEMORY;
+        default:
+            return SEVDB_ERROR_INTERNAL;
+            break;
+    }
+    if (pq == NULL) return SEVDB_ERROR_INTERNAL;
 
     sevdb_vector* candidate;
     pq_element worst_saved_el;
     float candidate_cos_sim;
 
-    for(uint32_t i = 0; i < db->capacity; i++){
+    int pq_capacity;
+    int pq_count;
+
+    for(uint32_t i = 0; i < db->count; i++){
         candidate = db->vectors[i];
         if (candidate == NULL || candidate->dimensions != v->dimensions) {
             continue; 
@@ -222,27 +279,36 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v,
 
         candidate_cos_sim = get_cosine_similarity(v->dimensions, v->components, candidate->components);
 
-        if (pq_get_count(pq) < pq_get_capacity(pq)){
-            if (!pq_enqueue(pq, candidate_cos_sim, candidate)) {
-                pq_destroy(pq);
-                return 0;
+        if(!pq_get_capacity(pq, &pq_capacity)) return SEVDB_ERROR_INTERNAL;
+        if(!pq_get_count(pq, &pq_count)) return SEVDB_ERROR_INTERNAL;
+
+        if (pq_count < pq_capacity){
+            switch (pq_enqueue(pq, candidate_cos_sim, candidate)){
+                case PQ_OK:
+                    break;
+                default:
+                    pq_destroy(pq);
+                    return SEVDB_ERROR_INTERNAL;
             }
         } else {
             if (!pq_peek(pq, &worst_saved_el)){
                 pq_destroy(pq);
-                return 0;
+                return SEVDB_ERROR_INTERNAL; 
             }
 
             if (candidate_cos_sim > worst_saved_el.priority){
-                if (!(pq_dequeue(pq, &worst_saved_el) && pq_enqueue(pq, candidate_cos_sim, candidate))){
+                if (!(pq_dequeue(pq, &worst_saved_el) && pq_enqueue(pq, candidate_cos_sim, candidate) != PQ_OK)){
                     pq_destroy(pq);
-                    return 0;
+                    return SEVDB_ERROR_INTERNAL;
                 }
             }
         }
     }
 
-    int retrieved = pq_get_count(pq);
+    int retrieved;
+    if(!pq_get_count(pq, &retrieved)){
+        return SEVDB_ERROR_INTERNAL;
+    }
     pq_element out;
 
     for(int i = retrieved - 1; i >= 0; i--){
@@ -253,5 +319,6 @@ int sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v,
     }
 
     pq_destroy(pq);
-    return retrieved; 
+    *out_result_count = retrieved; 
+    return SEVDB_OK;
 }

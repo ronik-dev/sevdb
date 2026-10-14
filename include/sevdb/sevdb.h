@@ -20,9 +20,10 @@ extern "C" {
  * @param dimensions The number of components in the vector. Must be > 0.
  * @param components Pointer to a float array containing the vector data. 
  *                   The data is copied internally, so the caller can safely free their own array after this call.
- * @return A pointer to the newly allocated vector, or NULL if allocation fails or invalid parameters are provided.
+ * @param result Pointer to a variable where the newly allocated vector will be written.
+ * @return sevdb_state (SEVDB_OK on success, SEVDB_ERROR_INVALID_ARGUMENT, or SEVDB_ERROR_OUT_OF_MEMORY).
  */
-sevdb_vector* sevdb_vector_create(uint32_t id, uint32_t dimensions, const float *components);
+sevdb_state sevdb_vector_create(uint32_t id, uint32_t dimensions, const float *components, sevdb_vector **result);
 
 /**
  * @brief Safely frees the memory associated with a vector.
@@ -46,10 +47,10 @@ const float* sevdb_vector_get_components(const sevdb_vector *v);
  * @brief Allocates and initializes a new vector database.
  * 
  * @param capacity The maximum number of vectors this database can store.
- *
- * @return A pointer to the new database, or NULL if allocation fails.
+ * @param result Pointer to a variable where the newly allocated database will be written.
+ * @return sevdb_state (SEVDB_OK on success, SEVDB_ERROR_INVALID_ARGUMENT, or SEVDB_ERROR_OUT_OF_MEMORY).
  */
-sevdb_database* sevdb_db_create(uint32_t capacity);
+sevdb_state sevdb_db_create(uint32_t capacity, sevdb_database **result);
 
 /**
  * @brief Destroys the database and frees ALL vectors stored within it.
@@ -64,7 +65,7 @@ uint32_t sevdb_db_get_capacity(const sevdb_database *db);
 uint32_t sevdb_db_get_count(const sevdb_database *db);
 
 // --- Database Setters 
-bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase);
+sevdb_state sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase);
 
 /**
  * @brief Inserts a vector into the database.
@@ -73,18 +74,20 @@ bool sevdb_db_increase_capacity(sevdb_database *db, uint32_t increase);
  * @param v Pointer to the vector to insert. 
  *
  * @note **Ownership Transfer:** If successful, the database assumes ownership of the vector's memory. 
- *      Do not manually call sevdb_vector_destroy on it.
+ *       Do not manually call sevdb_vector_destroy on it.
  * 
- * @note **Vector ID uniqueness:** The database rejects vector with duplicate ids.
- *      This means that if you wish to destroy a rejected vector, you should do it manually, and not through the database.
+ * @note **Vector ID uniqueness:** The database rejects vectors with duplicate ids.
+ *       This means that if you wish to destroy a rejected vector, you should do it manually, and not through the database.
  *
- * @return The inserted vector on success, or NULL if the database is full, arguments are NULL, or insertion fails.
+ * @return sevdb_state (SEVDB_OK on success, SEVDB_ERROR_DATABASE_FULL, SEVDB_ERROR_DUPLICATE_ID, etc.).
  */
-sevdb_vector* sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);
+sevdb_state sevdb_db_push_vector(sevdb_database *db, sevdb_vector *v);
 
 /**
  * @brief Retrieves a vector from the database by its ID.
  * 
+ * @param db Pointer to the database instance.
+ * @param id The identifier of the vector to retrieve.
  * @return A pointer to the vector, or NULL if the ID is not found. 
  *         The database retains ownership of the returned memory.
  */
@@ -96,9 +99,9 @@ sevdb_vector* sevdb_db_get_vector_by_id(sevdb_database *db, uint32_t id);
  * @param db Pointer to the database instance.
  * @param id The identifier of the vector to remove.
  *
- * @return True on success, False if file operations fail.
+ * @return sevdb_state (SEVDB_OK on success, SEVDB_ERROR_NOT_FOUND if the ID does not exist, etc.).
  */
-bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
+sevdb_state sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
 
 /**
  * @brief Performs a Top-K similarity search using Cosine Similarity.
@@ -106,10 +109,11 @@ bool sevdb_db_remove_vector_by_id(sevdb_database *db, uint32_t id);
  * @param db Pointer to the database to search.
  * @param v The target vector to compare against.
  * @param k The maximum number of similar vectors to return.
- * @param out_result) A caller-allocated array of sevdb_similarity_scored_vector (size >= k) that will be populated with the best matches.
- * @return The actual number of vectors found and placed into out_result.
+ * @param out_result_count Pointer to a variable where the actual number of vectors found will be written.
+ * @param out_results A caller-allocated array of sevdb_similarity_scored_vector (size >= k) that will be populated with the best matches.
+ * @return sevdb_state (SEVDB_OK on success, SEVDB_ERROR_INVALID_ARGUMENT, or SEVDB_ERROR_OUT_OF_MEMORY).
  */
-int sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v, int k, sevdb_similarity_scored_vector* out_results);
+sevdb_state sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_vector* v, int k, int* out_result_count, sevdb_similarity_scored_vector* out_results);
 
 
 // ==========================================

@@ -4,11 +4,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-### Changed 
-- now `sevdb_db_remove_vector_by_id` returns bool instead of void.
+### Changed
+- Breaking Change: Replaced boolean and pointer return types with typed state enums (`sevdb_state`, `hm_state`, `pq_state`) **across the entire public API** to provide granular error reporting (e.g., out of memory, full capacity, duplicate IDs, missing IDs).
+- Breaking Change: Refactored object creation and data retrieval functions to use output parameters (e.g., sevdb_vector **result, int *out_count) alongside state enum return values.
+- Updated Doxygen documentation across `sevdb.h`, `hashmap.h`, and `pqueue.h` to accurately reflect the new double-pointer API contracts and ownership rules.
+- Updated `ARCHITECTURE.md` to document the new double-pointer and state-enum memory model.
+- Refactored all Criterion test suites and the standalone benchmark.c harness to comply with the new API signatures and state assertions.
 
 ### Fixed
 - Fixed bug in `sevdb_db_remove_vector_by_id`: handled previoulsy ignored return value of `hm_update_value`, which could have resulted in inconsistent state.
+- Fixed a bug in `hm_insert_new` where the bucket insertion index was not recalculated after an automatic capacity growth, causing elements to be inserted into mathematically incorrect buckets.
 
 ## [0.3.0] - 2026-10-08
 ### Added

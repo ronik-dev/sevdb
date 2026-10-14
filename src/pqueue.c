@@ -47,19 +47,21 @@ static void heapify_down(pqueue* pq, int index){
     }
 }
 
-pqueue* pq_create(int capacity, pq_compare_fn comparator){
-    if(capacity <= 0) return NULL;
+pq_state pq_create(int capacity, pq_compare_fn comparator, pqueue** out_result){
+    if(capacity <= 0) return PQ_ERROR_INVALID_ARGUMENT;
     pqueue* pq = malloc(sizeof(pqueue));
-    if(pq == NULL) return NULL;
+    if(pq == NULL) return PQ_ERROR_OUT_OF_MEMORY;
     pq->capacity = capacity; 
     pq->count = 0;
     pq->comparator = comparator;
     pq->elements = calloc(capacity, sizeof(pq_element));
     if(pq->elements == NULL){
         free(pq);
-        return NULL;
+        return PQ_ERROR_OUT_OF_MEMORY;
     }    
-    return pq;
+    *out_result = pq;
+    return PQ_OK;
+
 }
 
 void pq_destroy(pqueue* pq){
@@ -69,14 +71,15 @@ void pq_destroy(pqueue* pq){
 }
 
 
-bool pq_enqueue(pqueue* pq, float priority, void* content){
-    if(pq == NULL || pq->capacity == pq->count || isnan(priority)) return false;
+pq_state pq_enqueue(pqueue* pq, float priority, void* content){
+    if (pq == NULL || isnan(priority)) return PQ_ERROR_INVALID_ARGUMENT; 
+    if (pq->capacity == pq->count) return PQ_ERROR_FULL;
     //creating element
     pq_element new_pq_el = {.content = content, .priority = priority};
     //enqueueing
     pq->elements[pq->count++]=new_pq_el;
     heapify_up(pq,pq->count-1);
-    return true;
+    return PQ_OK;
 }
 
 bool pq_dequeue(pqueue* pq, pq_element* out_item){
@@ -96,14 +99,16 @@ bool pq_peek(const pqueue* pq, pq_element* out_item){
     return true;
 }
 
-int pq_get_count(const pqueue* pq){
-    if(pq == NULL) return -1;
-    return pq->count;
+bool pq_get_count(const pqueue* pq, int* out_result){
+    if(pq == NULL) return false;
+    *out_result = pq->count;
+    return true;
 }
 
-int pq_get_capacity(const pqueue* pq){
-    if(pq == NULL) return -1;
-    return pq->capacity;
+bool pq_get_capacity(const pqueue* pq, int* out_result){
+    if(pq == NULL) return false;
+    *out_result = pq->capacity;
+    return true;
 }
 
 bool pq_clear(pqueue* pq){

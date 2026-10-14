@@ -131,8 +131,11 @@ sevdb_database* sevdb_db_deserialize_v1(FILE* fp) {
         return NULL;
     if (count > capacity) return NULL;
 
-    sevdb_database *new_db = sevdb_db_create(capacity);
-    if (new_db == NULL) return NULL;
+    sevdb_database *new_db = NULL;
+    // UPDATE: Pass double pointer and check state
+    if (sevdb_db_create(capacity, &new_db) != SEVDB_OK) {
+        return NULL;
+    }
 
     for (uint32_t v = 0; v < count; v++) {
         uint32_t v_id;
@@ -163,13 +166,18 @@ sevdb_database* sevdb_db_deserialize_v1(FILE* fp) {
             return NULL;
         }
 
-        sevdb_vector *new_vector = sevdb_vector_create(v_id, v_dimensions, v_components);
-        free(v_components); // sevdb_vector_create memcpy's the components, safe to free now
-        if (new_vector == NULL) {
+        sevdb_vector *new_vector = NULL;
+        // UPDATE: Pass double pointer and check state
+        if (sevdb_vector_create(v_id, v_dimensions, v_components, &new_vector) != SEVDB_OK) {
+            free(v_components);
             sevdb_db_destroy(new_db);
             return NULL;
         }
-        if (sevdb_db_push_vector(new_db, new_vector) == NULL) {
+        
+        free(v_components); // sevdb_vector_create memcpy's the components, safe to free now
+        
+        // UPDATE: Check state against SEVDB_OK instead of NULL
+        if (sevdb_db_push_vector(new_db, new_vector) != SEVDB_OK) {
             sevdb_vector_destroy(new_vector);
             sevdb_db_destroy(new_db);
             return NULL;

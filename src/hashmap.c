@@ -6,18 +6,35 @@
 #define USED    1
 #define DELETED 2
 
-hashmap* hm_create(uint32_t capacity){
-    if (capacity == 0) return NULL;
+
+
+/**
+ * @struct hashmap
+ * @brief A linear-probing hash map for storing key-value pairs in O(1) average time.
+ * 
+ * @var hashmap::capacity The total number of allocated slots in the hash map.
+ * @var hashmap::count The number of active elements currently stored.
+ * @var hashmap::elements Pointer to the contiguous array of hm_element slots.
+ */
+typedef struct hashmap {
+    uint32_t capacity;
+    uint32_t count;
+    hm_element *elements;
+} hashmap;
+
+hm_state hm_create(uint32_t capacity, hashmap** out_result){
+    if (capacity == 0 || out_result == NULL) return HM_ERROR_INVALID_ARGUMENT;
     hashmap* hm = malloc(sizeof(hashmap));
-    if (hm == NULL) return NULL;
+    if (hm == NULL) return HM_ERROR_OUT_OF_MEMORY;
     hm->capacity= capacity;
     hm->count = 0;
     hm->elements = calloc(capacity, sizeof(hm_element));
     if (hm->elements == NULL){
         free(hm);
-        return NULL;
+        return HM_ERROR_OUT_OF_MEMORY;
     }
-    return hm;
+    *out_result = hm;
+    return HM_OK;
 }
 
 bool hm_destroy(hashmap *hm){
@@ -103,34 +120,43 @@ hm_element* search (const hashmap* hm, uint32_t key){
  * A full hash map has a search time of O(N).
  * We still cant grow over the max capacity of the hashmap
  */
-bool hm_insert_new(hashmap* hm, uint32_t key, uint32_t value){
-    if (hm == NULL) return false;
-    if (hm->count >= hm->capacity * 0.7f || hm->count >= hm->capacity - 1){
-        if (!hm_grow(hm)) return false;
-    }
-    if (hm->count >= hm->capacity-1) return false;
+hm_state hm_insert_new(hashmap* hm, uint32_t key, uint32_t value){
+    if (hm == NULL) return HM_ERROR_INVALID_ARGUMENT;
+    
+    // duplicate detection
     uint32_t i = hm_hash(key, hm->capacity);
     if(search(hm, key) != NULL){
-        return false;    
+        return HM_ERROR_DUPLICATE_KEY;    
     }
+    
+    // grow
+    if (hm->count >= hm->capacity * 0.7f || hm->count >= hm->capacity - 1){
+        if (hm->count == UINT32_MAX) return HM_ERROR_FULL;
+        if (!hm_grow(hm)) return HM_ERROR_OUT_OF_MEMORY;
+        i = hm_hash(key, hm->capacity); 
+    }
+    
+    if (hm->count >= hm->capacity-1) return HM_ERROR_FULL;
+    
     while(hm->elements[i].used == USED){
-        i = hm_hash(i+1,hm->capacity);
+        i = hm_hash(i+1, hm->capacity);
     }
     hm->elements[i].used = USED;
     hm->elements[i].key = key;
     hm->elements[i].value = value;
     hm->count++;
-    return true;
+    
+    return HM_OK;
 }
 
-bool hm_update_value(hashmap* hm, uint32_t key, uint32_t value){
-    if (hm == NULL) return false;
+hm_state hm_update_value(hashmap* hm, uint32_t key, uint32_t value){
+    if (hm == NULL) return HM_ERROR_INVALID_ARGUMENT;
     hm_element* duplicate = search(hm, key);
     if(duplicate){
         duplicate->value = value;
-        return true;    
+        return HM_OK;    
     }
-    return false;
+    return HM_ERROR_NOT_FOUND;
 }
 
 bool hm_contains_key(const hashmap* hm, uint32_t key){
@@ -140,12 +166,12 @@ bool hm_contains_key(const hashmap* hm, uint32_t key){
     return true;
 }
 
-bool hm_get_value(const hashmap* hm, uint32_t key, uint32_t *out_value){
-    if (hm == NULL || out_value == NULL) return false;
+hm_state hm_get_value(const hashmap* hm, uint32_t key, uint32_t *out_value){
+    if (hm == NULL || out_value == NULL) return HM_ERROR_INVALID_ARGUMENT;
     hm_element* target = search(hm, key);
-    if(target == NULL) return false;
+    if(target == NULL) return HM_ERROR_NOT_FOUND;
     *out_value = target->value;
-    return true;
+    return HM_OK;
 }
 
 /**
@@ -155,12 +181,24 @@ bool hm_get_value(const hashmap* hm, uint32_t key, uint32_t *out_value){
  * Using EMPTY would make all the following elements in the hashmap
  * unreachable during search.
  */
-bool hm_remove(hashmap* hm, uint32_t key){
-    if (hm == NULL) return false;
+hm_state hm_remove(hashmap* hm, uint32_t key){
+    if (hm == NULL) return HM_ERROR_INVALID_ARGUMENT;
     hm_element* target = search(hm,key);
-    if (target == NULL) return false;
+    if (target == NULL) return HM_ERROR_NOT_FOUND;
     target->value = 0;
     target->used= DELETED;
     hm->count--;
+    return HM_OK;
+}
+
+bool hm_get_capacity(const hashmap* hm, uint32_t* out_result){
+    if (hm == NULL || out_result == NULL) return false;
+    *out_result = hm->capacity;
+    return true;
+}
+
+bool hm_get_count(const hashmap* hm, uint32_t* out_result){
+    if (hm == NULL || out_result == NULL) return false;
+    *out_result = hm->count;
     return true;
 }

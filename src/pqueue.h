@@ -15,6 +15,7 @@ typedef struct pq_element {
     void* content;
 } pq_element;
 
+
 /**
  * @brief Comparator function pointer type for heap ordering.
  * 
@@ -33,16 +34,28 @@ typedef bool(*pq_compare_fn)(float a, float b);
  * provided at creation. Capacity is fixed; there is no growable variant.
  */
 typedef struct pqueue pqueue;
-  
+
+
+typedef enum pq_state {
+    PQ_OK = 0,                      //Operation succeded :)
+
+    PQ_ERROR_INVALID_ARGUMENT,      //Function called with unacceptable :( argument, try again.
+    PQ_ERROR_FULL,                  //Priority Queue has reached it maximum capacity
+    PQ_ERROR_DUPLICATE_KEY,         //Tryed to make an operation that would result in duplicate keys (not permitted)
+    PQ_ERROR_NOT_FOUND,             //Tryed to make an operation on an unexisting key
+    PQ_ERROR_OUT_OF_MEMORY,         //We have run out of memory :¬|
+    PQ_ERROR_INCONSISTENT_STATE     //CRITICAL! We reached an incosistent state
+} pq_state;
 
 /**
  * @brief Allocates a priority queue with room for exactly `capacity` elements.
  * 
  * @param capacity The maximum number of elements. Must be > 0.
  * @param comparator The function used to order the heap.
- * @return A pointer to the newly allocated queue, or NULL on failure.
+ * @param out_result Pointer to a variable where the newly allocated queue will be written.
+ * @return pq_state (PQ_OK on success, or a specific error code like PQ_ERROR_OUT_OF_MEMORY).
  */
-pqueue* pq_create(int capacity, pq_compare_fn comparator);
+pq_state pq_create(int capacity, pq_compare_fn comparator, pqueue** out_result);
 
 /**
  * @brief Frees the queue and its internal array storage. 
@@ -59,9 +72,9 @@ void pq_destroy(pqueue* pq);
  * @param pq Pointer to the queue.
  * @param priority The numeric priority to sort by. Must not be NaN.
  * @param content Opaque pointer to the caller's data. Must be kept alive by the caller.
- * @return True on success, False if the queue is NULL, full, or priority is NaN.
+ * @return pq_state (PQ_OK on success, PQ_ERROR_FULL if capacity reached, or PQ_ERROR_INVALID_ARGUMENT).
  */
-bool pq_enqueue(pqueue* pq, float priority, void* content);
+pq_state pq_enqueue(pqueue* pq, float priority, void* content);
 
 /**
  * @brief Removes and returns the highest-ranking element in the queue.
@@ -86,17 +99,19 @@ bool pq_peek(const pqueue* pq, pq_element* out_item);
  * @brief Retrieves the number of elements currently stored in the queue.
  * 
  * @param pq Pointer to the queue.
- * @return The element count, or -1 if pq is NULL.
+ * @param out_result Pointer to a variable where the retrieved element count will be written.
+ * @return True on success, False if pq or out_result is NULL.
  */
-int pq_get_count(const pqueue* pq);
+bool pq_get_count(const pqueue* pq, int* out_result);
 
 /**
  * @brief Retrieves the maximum capacity of the queue.
  * 
  * @param pq Pointer to the queue.
- * @return The fixed capacity, or -1 if pq is NULL.
+ * @param out_result Pointer to a variable where the retrieved fixed capacity will be written.
+ * @return True on success, False if pq or out_result is NULL.
  */
-int pq_get_capacity(const pqueue* pq);
+bool pq_get_capacity(const pqueue* pq, int* out_result);
 
 /**
  * @brief Empties the queue by resetting the count to zero.

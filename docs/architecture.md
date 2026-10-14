@@ -1,11 +1,11 @@
 # sevdb Architecture
 
-This document explains the *why* behind sevdb's design decisions, the tradeoffs considered and the reasoning that led to the current structure. 
+This document explains the *why* behind sevdb's design decisions, the tradeoffs considered and the reasoning that led to the current structure.
 It complements `docs/devlogs/`, which tracks the day-to-day *what* and *when*; this file is the curated, standing explanation for anyone reading the codebase without that history.
 
 ## Goals and non-goals
 
-sevdb is a small embedded vector database written in C17, built primarily as a learning exercise in C and as a lightweight retrieval backend for a personal RAG project. 
+sevdb is a small embedded vector database written in C17, built primarily as a learning exercise in C and as a lightweight retrieval backend for a personal RAG project.
 It deliberately does **not** aim to be a production-grade vector store.
 Concretely, it does not (at least for now) provide:
 
@@ -21,19 +21,20 @@ The library exposes two opaque types, `sevdb_vector` and `sevdb_database`, decla
 ```c
 typedef struct sevdb_vector sevdb_vector;
 typedef struct sevdb_database sevdb_database;
+
 ```
 
-Their actual field layout lives in `src/sevdb_private.h`, which is never installed or exposed to consumers. 
+Their actual field layout lives in `src/sevdb_private.h`, which is never installed or exposed to consumers.
 This is the standard C opaque-pointer pattern, chosen for two reasons:
 
 1. **ABI stability.** Consumers only ever hold a pointer; internal fields can be reordered, added, or removed without breaking code compiled against an older header, as long as the function signatures stay stable.
 2. **Enforced encapsulation.** Because callers cannot see `struct sevdb_vector`'s fields, they are forced through the accessor functions (`sevdb_vector_get_id`, etc.) rather than reaching in directly.
 
-All construction and destruction happens through paired functions (`sevdb_vector_create`/`sevdb_vector_destroy`, `sevdb_db_create`/`sevdb_db_destroy`), so the library, not the caller, decides the allocation strategy.
+All construction and destruction happens through paired functions (`sevdb_vector_create`/`sevdb_vector_destroy`, `sevdb_db_create`/`sevdb_db_destroy`), so the library, not the caller, decides the allocation strategy. Construction functions use a double-pointer output pattern (`**result`) alongside a status return code to clearly separate memory allocation from error handling.
 
 ## Memory model: "callee allocates," heap-based, flexible array members
 
-sevdb uses a **callee-allocates** convention throughout: functions that produce an object return a heap pointer the caller owns and must eventually destroy via the matching `_destroy` function. Nothing is returned by value or expected to live on the caller's stack.
+sevdb uses a **callee-allocates** convention throughout: functions that produce an object allocate it on the heap and pass it back to the caller via an output pointer (e.g., `sevdb_vector **result`). The function itself returns a state enum indicating success or failure. The caller owns the successfully allocated pointer and must eventually destroy it via the matching `_destroy` function. Nothing is returned by value or expected to live on the caller's stack.
 
 `sevdb_vector` is defined with a C99 flexible array member:
 
@@ -43,6 +44,7 @@ struct sevdb_vector {
     uint32_t dimensions;
     float components[];
 };
+
 ```
 
 This means a vector's header and its component data are a **single contiguous allocation** (`sizeof(sevdb_vector) + dimensions * sizeof(float)`), sized exactly to the vector's dimensionality at creation time.
@@ -50,8 +52,8 @@ The alternative (storing a separate `float*` pointer to a second allocation) was
 
 ### Ownership transfer on push
 
-`sevdb_db_push_vector` transfers ownership of the vector to the database on success: from that point, the database is responsible for freeing it (which happens in `sevdb_db_destroy` or `sevdb_db_remove_vector_by_id`), and the caller must not call `sevdb_vector_destroy` on it themselves. 
-The function will reject a vector if the database already contains another with the same id. In this case ownership is not transfered, and the caller should manually destroy the vector.
+`sevdb_db_push_vector` transfers ownership of the vector to the database on success (returning `SEVDB_OK`). From that point, the database is responsible for freeing it (which happens in `sevdb_db_destroy` or `sevdb_db_remove_vector_by_id`), and the caller must not call `sevdb_vector_destroy` on it themselves.
+The function will reject a vector and return an error state (such as `SEVDB_ERROR_DUPLICATE_ID`) if the database already contains another with the same id. In this case, ownership is **not** transferred, and the caller should manually destroy the vector.
 This is documented in `sevdb.h`'s Doxygen comments and is the one place in the API where ownership crosses a boundary, worth knowing before extending the API, since introducing a second ownership-transfer point without equally clear documentation is an easy way to create a double-free.
 
 ## Data structure: Packed vector array with a Hash Index
@@ -65,11 +67,13 @@ struct sevdb_database {
     sevdb_vector **vectors;
     hashmap *vector_id_map;
 };
+
 ```
 
 The `vectors` array is the primary storage for vector objects. It is allocated to `capacity` entries, while `count` records how many vectors are currently stored. The database maintains a **packed-array invariant**: all stored vectors occupy the range `[0, count)`, with no `NULL` holes between active entries.
 The second structure, `vector_id_map`, is a hash map from a vector's unique `uint32_t` ID to its current index in the `vectors` array.
 This separation gives the database two useful properties:
+
 - The vector array provides compact, contiguous storage of vector pointers and makes scanning all vectors straightforward.
 - The hash map provides direct lookup of a vector's array position by ID without scanning the entire database.
 
@@ -81,6 +85,7 @@ The hash map therefore acts as an **index**, rather than being the primary owner
 
 ```text
 vector ID -> position in vectors[]
+
 ```
 
 The actual vector remains owned by the database's vector array.
@@ -119,6 +124,7 @@ map:
 A -> 0
 C -> 2
 D -> 1
+
 ```
 
 This makes removal **O(1) average time** for the hash-map lookup plus constant-time array manipulation. The tradeoff is that vector positions are not stable: removing one vector can change the array index of another vector. Code outside the database should therefore never treat an array index as a persistent vector identifier.
@@ -128,11 +134,12 @@ This makes removal **O(1) average time** for the hash-map lookup plus constant-t
 `sevdb_db_push_vector` appends a vector at `vectors[count]` and inserts its ID and resulting index into the hash map.
 
 Insertion is rejected when:
-- the database is full;
-- the vector pointer is `NULL`; or
-- another vector already has the same ID.
 
-The operation is performed transactionally with respect to the two data structures: the vector is first placed into the array and `count` is incremented, but if the hash-map insertion fails, the array slot and count are rolled back.
+- the database is full (`SEVDB_ERROR_DATABASE_FULL`);
+- the vector pointer is `NULL` (`SEVDB_ERROR_INVALID_ARGUMENT`); or
+- another vector already has the same ID (`SEVDB_ERROR_DUPLICATE_ID`).
+
+The operation returns `SEVDB_OK` on success and is performed transactionally with respect to the two data structures: the vector is first placed into the array and `count` is incremented, but if the hash-map insertion fails, the array slot and count are rolled back.
 This is important because the vector array and hash index must remain consistent. A vector present in the array without a corresponding hash-map entry would make ID lookup incorrect.
 
 ### Capacity growth
@@ -151,12 +158,14 @@ Each hash-map slot has one of three states:
 EMPTY
 USED
 DELETED
+
 ```
 
 The hash function currently uses the integer ID directly:
 
 ```c
 key % capacity
+
 ```
 
 Because the vector IDs are already integer keys, this keeps the implementation simple.
@@ -182,6 +191,7 @@ for every stored vector:
     else if candidate is better than the worst stored result:
         remove worst result
         insert candidate
+
 ```
 
 This produces:
@@ -200,6 +210,7 @@ For cosine similarity, `sevdb_db_search_k_similar_vectors` uses:
 static bool is_min_heap(float a, float b) {
     return a < b;
 }
+
 ```
 
 This may initially appear counterintuitive because the search wants the highest cosine similarities. The min-heap is intentional: the smallest score among the retained top-K candidates is placed at the root so it can be efficiently identified and replaced when a better candidate is found.
@@ -214,51 +225,52 @@ The on-disk format (documented in full in `sevdb.h` and `persistence.c`) is a fl
 Header:  magic "SEVDB" (5 bytes) | version (u32) | capacity (u32) | count (u32)
 Vector*: id (u32) | dimensions (u32) | components (f32 * dimensions)
 Footer:  crc32 checksum (u32)
+
 ```
 
 Three decisions here are worth calling out explicitly:
 
-- **Explicit version field.** `sevdb_db_deserialize` dispatches on the version number read from the header (currently only `case 1` is implemented). 
-  This means the file format can evolve, a v2 layout can be added alongside v1's reader, without breaking the ability to load files written by older versions of the library. 
-  This is the same reasoning that motivates having a versioned CMake project: forward compatibility has to be designed in from the first release, not retrofitted once files already exist in the wild.
-- **CRC32 checksum over the whole payload**, verified before any deserialization logic runs. 
-  If the checksum doesn't match, `sevdb_db_deserialize` fails fast and returns `NULL` rather than attempting to parse a possibly-corrupted structure, corruption is treated as "no valid database," not "best effort partial load."
-- **Atomic write via temp-file + rename.** `sevdb_db_serialize` writes to a `mkstemp`-generated temporary file in the same directory, and only `rename()`s it over the destination path after the full write (including checksum) has succeeded and been flushed. 
-  Since `rename()` is atomic on POSIX filesystems, a process crash or power loss mid-write can never leave a half-written file at the destination path, the destination is either the old complete file or the new complete file, never a corrupt hybrid. This is why `persistence.c` currently depends on POSIX (`mkstemp`, `unistd.h`) rather than pure C11/C17, standard C has no atomic rename-on-commit primitive (see Known Limitations).
+- **Explicit version field.** `sevdb_db_deserialize` dispatches on the version number read from the header (currently only `case 1` is implemented).
+This means the file format can evolve, a v2 layout can be added alongside v1's reader, without breaking the ability to load files written by older versions of the library.
+This is the same reasoning that motivates having a versioned CMake project: forward compatibility has to be designed in from the first release, not retrofitted once files already exist in the wild.
+- **CRC32 checksum over the whole payload**, verified before any deserialization logic runs.
+If the checksum doesn't match, `sevdb_db_deserialize` fails fast and returns `NULL` rather than attempting to parse a possibly-corrupted structure, corruption is treated as "no valid database," not "best effort partial load."
+- **Atomic write via temp-file + rename.** `sevdb_db_serialize` writes to a `mkstemp`-generated temporary file in the same directory, and only `rename()`s it over the destination path after the full write (including checksum) has succeeded and been flushed.
+Since `rename()` is atomic on POSIX filesystems, a process crash or power loss mid-write can never leave a half-written file at the destination path, the destination is either the old complete file or the new complete file, never a corrupt hybrid. This is why `persistence.c` currently depends on POSIX (`mkstemp`, `unistd.h`) rather than pure C11/C17, standard C has no atomic rename-on-commit primitive (see Known Limitations).
 
 ## Error-handling convention
 
 sevdb distinguishes two categories of failure, and handles each differently rather than applying one rule everywhere:
 
-1. **Runtime/data failures**: conditions a correctly-written caller can hit during normal use: allocation failure, a full priority queue, a missing ID, a corrupted file. 
-   These are defended against explicitly and communicated via a return code (`false`, `NULL`, or a sentinel like `-1` for `pq_get_count`).
-   The caller is expected to check the result.
-2. **Precondition violations**: passing a pointer to an object that should already be valid (e.g. calling `sevdb_vector_get_id(NULL)`). 
-   These are programmer bugs, not recoverable runtime conditions, and are guarded with
-   `assert()` rather than a sentinel return value. A sentinel here would be actively misleading in some cases (`sevdb_vector_get_id` returning `0` on a NULL input is indistinguishable from a legitimately ID-0 vector), so pretending it's a normal "checkable" failure would produce silently wrong answers rather than a loud, debuggable failure.
+1. **Runtime/data failures**: Conditions a correctly-written caller can hit during normal use (e.g., allocation failure, full database, missing ID, duplicate key, or corrupted file). These are defended against explicitly and communicated via typed state enums (`sevdb_state`, `hm_state`, `pq_state`). Success is always represented by a zero value (e.g., `SEVDB_OK`, `PQ_OK`). When a function needs to return both a status and data (such as object creation or retrieving a queue count), the data is populated via a caller-provided output pointer (e.g., `sevdb_database **result` or `int *out_result`). The caller is strictly expected to check the return state before using the output pointer.
+
+
+2. **Precondition violations**: Passing a pointer to an object that should already be valid (e.g. calling `sevdb_vector_get_id(NULL)`).
+These are programmer bugs, not recoverable runtime conditions, and are guarded with `assert()` rather than a sentinel return value. A sentinel here would be actively misleading in some cases (`sevdb_vector_get_id` returning `0` on a NULL input is indistinguishable from a legitimately ID-0 vector), so pretending it's a normal "checkable" failure would produce silently wrong answers rather than a loud, debuggable failure.
 
 `_destroy` functions are the one deliberate exception to the assert rule: they follow the standard C idiom (mirroring `free(NULL)`) of being safe no-ops on `NULL`, since cleanup code frequently needs to handle "might not have been allocated" without extra branching at every call site.
 
 ## Testing strategy
 
-Tests are split into suites by concern (`internal_test_suite`, `distance_test_suite`, `priority_queue_test_suite`), mirroring the module split in `src/`, plus a standalone `benchmark` binary that isn't part of `ctest` and is run manually to sanity-check search performance at scale (100k vectors, 1536 dimensions a realistic modern embedding size). Persistence tests specifically exercise the serialize/deserialize round trip under several conditions (empty database, high-dimension vectors, post-removal state) to catch bugs that only manifest across a save/load boundary rather than in a single in-memory session.
+Tests are split into suites by concern (`internal_test_suite`, `distance_test_suite`, `priority_queue_test_suite`, `hash_map_test_suite`), mirroring the module split in `src/`, plus a standalone `benchmark` binary that isn't part of `ctest` and is run manually to sanity-check search performance at scale (100k vectors, 1536 dimensions a realistic modern embedding size). Persistence tests specifically exercise the serialize/deserialize round trip under several conditions (empty database, high-dimension vectors, post-removal state) to catch bugs that only manifest across a save/load boundary rather than in a single in-memory session.
 
 ## Known limitations and future directions
 
 These are open tradeoffs that are intentionally documented so that future changes preserve the reasoning behind the current architecture.
-- **Similarity search is O(n log k).**  
-  The ID index makes individual vector lookup approximately O(1) on average, but nearest-neighbor search still requires examining every compatible vector. At larger dataset sizes, the natural next step is an approximate nearest-neighbor structure such as HNSW.
-- **The hash index consumes additional memory.**  
-  Each vector is represented both by its object in the vector array and by an entry in `vector_id_map`. This is worthwhile because ID lookup and removal are approximately O(1) on average, but it introduces additional memory overhead and requires the array and index to remain synchronized.
-- **Vector positions are not stable.**  
-  Removal uses swap-with-last compaction. As a result, deleting one vector can change the array index associated with another vector. The hash map is therefore the authoritative mechanism for resolving IDs to positions; callers should not depend on internal array positions.
-- **Similarity search is currently exhaustive.**  
-  The existing priority queue is reusable as the top-K result-selection mechanism, so an approximate candidate-generation structure could be introduced later without necessarily changing the result-ranking interface.
-- **No concurrency support.**  
-  The database, hash map, and vector storage currently assume single-threaded access. Concurrent reads or writes would require synchronization and a clearly defined ownership/thread-safety model.
-- **Persistence depends on POSIX APIs.**  
-  Atomic serialization currently relies on APIs such as `mkstemp`, `unistd.h`, and `rename()`. Portability to native Windows or other non-POSIX environments would require an abstraction around temporary-file creation and atomic replacement.
-- **Capacity only grows.**  
-  The database currently supports explicit capacity increases but has no shrink-to-fit mechanism. This keeps the memory model simple but can leave unused pointer capacity after large databases are reduced in size.
-- **Vector dimensionality is checked during search.**  
-  Vectors with dimensions different from the query vector are skipped rather than rejected globally. This allows a database to contain vectors of different dimensionalities, but means a query only considers compatible vectors.
+
+- **Similarity search is O(n log k).**
+The ID index makes individual vector lookup approximately O(1) on average, but nearest-neighbor search still requires examining every compatible vector. At larger dataset sizes, the natural next step is an approximate nearest-neighbor structure such as HNSW.
+- **The hash index consumes additional memory.**
+Each vector is represented both by its object in the vector array and by an entry in `vector_id_map`. This is worthwhile because ID lookup and removal are approximately O(1) on average, but it introduces additional memory overhead and requires the array and index to remain synchronized.
+- **Vector positions are not stable.**
+Removal uses swap-with-last compaction. As a result, deleting one vector can change the array index associated with another vector. The hash map is therefore the authoritative mechanism for resolving IDs to positions; callers should not depend on internal array positions.
+- **Similarity search is currently exhaustive.**
+The existing priority queue is reusable as the top-K result-selection mechanism, so an approximate candidate-generation structure could be introduced later without necessarily changing the result-ranking interface.
+- **No concurrency support.**
+The database, hash map, and vector storage currently assume single-threaded access. Concurrent reads or writes would require synchronization and a clearly defined ownership/thread-safety model.
+- **Persistence depends on POSIX APIs.**
+Atomic serialization currently relies on APIs such as `mkstemp`, `unistd.h`, and `rename()`. Portability to native Windows or other non-POSIX environments would require an abstraction around temporary-file creation and atomic replacement.
+- **Capacity only grows.**
+The database currently supports explicit capacity increases but has no shrink-to-fit mechanism. This keeps the memory model simple but can leave unused pointer capacity after large databases are reduced in size.
+- **Vector dimensionality is checked during search.**
+Vectors with dimensions different from the query vector are skipped rather than rejected globally. This allows a database to contain vectors of different dimensionalities, but means a query only considers compatible vectors.

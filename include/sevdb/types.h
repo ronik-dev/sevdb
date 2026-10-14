@@ -29,12 +29,30 @@ typedef struct sevdb_database sevdb_database;
  *
  * @note Couples a vector with it's simillarity score, used as return type for a similarity search.
  */
-
 typedef struct sevdb_similarity_scored_vector{
     sevdb_vector* vector;
     float score;
 }sevdb_similarity_scored_vector;
 
+/**
+ * @enum sevdb_state
+ * @brief all failure conditions
+ */
+typedef enum{
+    //OK
+    SEVDB_OK = 0,
+
+    //FUNCTION ARGUMENTS
+    SEVDB_ERROR_INVALID_ARGUMENT,
+
+    //DATABASE INTERNAL STATUS
+    SEVDB_ERROR_DATABASE_FULL,      //The database reached its maximum capacity
+    SEVDB_ERROR_DUPLICATE_ID,       //Inconsistent state: there are two entries with the same ID
+    SEVDB_ERROR_NOT_FOUND,          //Requested an operation on a non existing element
+    SEVDB_ERROR_INTERNAL,           //Inconsistent state: internal error
+    SEVDB_ERROR_OUT_OF_MEMORY,  
+    SEVDB_ERROR_OVERFLOW
+}sevdb_state;
 
 #ifdef __cplusplus
 }
