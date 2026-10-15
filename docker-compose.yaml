@@ -1,6 +1,10 @@
 services:
   dev:
     image: sevdb-dev
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
     build: .
     working_dir: /project
     volumes:

@@ -5,6 +5,8 @@ RUN apt-get update && \
         gcc \
         cmake \
         make \
+        gdb \
+        valgrind \
         libcriterion-dev \
     && rm -rf /var/lib/apt/lists/*
 

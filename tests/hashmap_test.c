@@ -148,3 +148,80 @@ Test(hashmap, should_reject_invalid_capacity) {
     hashmap *hm = (hashmap*)0xDEADBEEF; // Dummy address
     cr_assert_eq(hm_create(0, &hm), HM_ERROR_INVALID_ARGUMENT, "hm_create should return error for capacity 0");
 }
+
+Test(hashmap, regression_should_recalculate_bucket_index_after_growth) {
+    uint32_t initial_capacity = 4;
+    hashmap *hm = NULL;
+    cr_assert_eq(hm_create(initial_capacity, &hm), HM_OK);
+
+    // Fill to the load factor threshold (4 * 0.7 = 2.8)
+    // We need 3 elements so the count becomes 3, triggering growth on the 4th.
+    cr_assert_eq(hm_insert_new(hm, 1, 10), HM_OK);
+    cr_assert_eq(hm_insert_new(hm, 2, 20), HM_OK);
+    cr_assert_eq(hm_insert_new(hm, 3, 30), HM_OK);
+
+    // This 4th insert now triggers the capacity growth.
+    uint32_t triggering_key = 4;
+    cr_assert_eq(hm_insert_new(hm, triggering_key, 40), HM_OK);
+
+    uint32_t capacity_after_growth;
+    hm_get_capacity(hm, &capacity_after_growth);
+    cr_assert(capacity_after_growth > initial_capacity, "Expected hashmap to grow");
+
+    // Verify the triggering element is reachable at its correct rehashed index
+    uint32_t val;
+    cr_assert_eq(hm_get_value(hm, triggering_key, &val), HM_OK, 
+                 "Triggering key must be retrievable after growth");
+    cr_assert_eq(val, 40);
+
+    // Insert subsequent elements that hash to the same bucket in both old and new capacities
+    cr_assert_eq(hm_insert_new(hm, 4 + capacity_after_growth, 400), HM_OK);
+    cr_assert_eq(hm_get_value(hm, 4 + capacity_after_growth, &val), HM_OK);
+    cr_assert_eq(val, 400);
+
+    hm_destroy(hm);
+}
+
+Test(hashmap, should_return_not_found_on_missing_key_operations) {
+    hashmap *hm = NULL;
+    hm_create(8, &hm);
+
+    uint32_t val;
+    cr_assert_eq(hm_get_value(hm, 1234, &val), HM_ERROR_NOT_FOUND, 
+                 "hm_get_value should return HM_ERROR_NOT_FOUND for non-existent key");
+    cr_assert_eq(hm_remove(hm, 1234), HM_ERROR_NOT_FOUND, 
+                 "hm_remove should return HM_ERROR_NOT_FOUND for non-existent key");
+    cr_assert_eq(hm_update_value(hm, 1234, 50), HM_ERROR_NOT_FOUND, 
+                 "hm_update_value should return HM_ERROR_NOT_FOUND for non-existent key");
+
+    hm_destroy(hm);
+}
+
+Test(hashmap, should_reuse_deleted_tombstone_slot) {
+    hashmap *hm = NULL;
+    hm_create(5, &hm);
+
+    // Insert elements causing collision chaining
+    cr_assert_eq(hm_insert_new(hm, 1, 100), HM_OK);
+    cr_assert_eq(hm_insert_new(hm, 6, 200), HM_OK); // 6 % 5 == 1
+
+    uint32_t initial_count;
+    hm_get_count(hm, &initial_count);
+    cr_assert_eq(initial_count, 2);
+
+    // Remove key 1, creating a DELETED tombstone
+    cr_assert_eq(hm_remove(hm, 1), HM_OK);
+
+    // Re-inserting key 1 or another key hashing to bucket 1 should reclaim the tombstone
+    cr_assert_eq(hm_insert_new(hm, 11, 300), HM_OK); // 11 % 5 == 1
+
+    uint32_t val;
+    cr_assert_eq(hm_get_value(hm, 11, &val), HM_OK);
+    cr_assert_eq(val, 300);
+
+    // Key 6 further down the probe chain must still remain intact
+    cr_assert_eq(hm_get_value(hm, 6, &val), HM_OK);
+    cr_assert_eq(val, 200);
+
+    hm_destroy(hm);
+}
