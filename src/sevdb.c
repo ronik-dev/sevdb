@@ -297,7 +297,7 @@ sevdb_state sevdb_db_search_k_similar_vectors(sevdb_database *db, const sevdb_ve
             }
 
             if (candidate_cos_sim > worst_saved_el.priority){
-                if (!(pq_dequeue(pq, &worst_saved_el) && pq_enqueue(pq, candidate_cos_sim, candidate) != PQ_OK)){
+                if (!(pq_dequeue(pq, &worst_saved_el) || pq_enqueue(pq, candidate_cos_sim, candidate) != PQ_OK)){
                     pq_destroy(pq);
                     return SEVDB_ERROR_INTERNAL;
                 }

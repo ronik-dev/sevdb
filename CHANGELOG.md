@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Fixed bug in `sevdb_db_remove_vector_by_id`: handled previoulsy ignored return value of `hm_update_value`, which could have resulted in inconsistent state.
 - Fixed a bug in `hm_insert_new` where the bucket insertion index was not recalculated after an automatic capacity growth, causing elements to be inserted into mathematically incorrect buckets.
+- Fixed a bug in `sevdb_db_search_k_similar_vectors` introduced by the refactor for the new changes in pqueue, that made the search fail when the priority queue replacement actually succeeded.
 
 ## [0.3.0] - 2026-10-08
 ### Added

@@ -8,7 +8,7 @@
 int main(void) {
     srand((unsigned int)time(NULL));
 
-    int vector_number = 100000;
+    int vector_number = 1000000;
     int k = 5;
     int vector_dimension = 1536;
 
