@@ -4,6 +4,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.4.0] - 2026-10-15
 ### Changed
 - Breaking Change: Replaced boolean and pointer return types with typed state enums (`sevdb_state`, `hm_state`, `pq_state`) **across the entire public API** to provide granular error reporting (e.g., out of memory, full capacity, duplicate IDs, missing IDs).
 - Breaking Change: Refactored object creation and data retrieval functions to use output parameters (e.g., sevdb_vector **result, int *out_count) alongside state enum return values.
