@@ -21,6 +21,9 @@ jobs:
       - name: run tests
         run: make test
 
+      - name: build release
+        run: make build-release
+
   publish-image:
     runs-on: ubuntu-latest
     needs: build-and-test

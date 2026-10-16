@@ -23,7 +23,10 @@ In the future i will provide a build without testing dependencies, but its out o
 
 Use the included `Makefile` to interact with the project:
 - **Build the project:** `make build`
+- **Build the release version:** `make build-release`
 - **Run the test suite:** `make test`
+- **Run the benchmark (Dev):** `make benchmark`
+- **Run the benchmark (Release):** `make benchmark-release`
 - **Clean the environment:** `make clean`
 - **Open a dev shell:** `make shell`
 

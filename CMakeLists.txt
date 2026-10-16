@@ -23,6 +23,19 @@ target_include_directories(sevdb PRIVATE src)
 # math standard library
 target_link_libraries(sevdb PRIVATE m)
 
+
+#-------------------------
+#- RELEASE OPTIMIZATIONS -
+#-------------------------
+
+# Enable Link Time Optimization for Release builds
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+
+# Add aggressive optimization flags
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    target_compile_options(sevdb PRIVATE -O3 -march=native -flto)
+endif()
+
 #--------------
 #- VERSIONING -
 #--------------

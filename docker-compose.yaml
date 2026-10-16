@@ -10,6 +10,8 @@ services:
     volumes:
       - .:/project
       - build:/build
+      - build-release:/build-release
 
 volumes:
   build:
+  build-release:
