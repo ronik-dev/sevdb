@@ -4,13 +4,11 @@
 #### Goal
 This is a personal project that aims to create a simple embedded vector database in C.
 This does not intend to be a finished production ready product, as i am more interested in learning how vector databases work and improve my C programming language skills.
-The main functionalities i aim to produce are:
-- Uploading new vectors to the database
-- Deleting vectors from the database
-- Implement a retrieval algorithm (starting from linear search, maybe later move to HNSW)
-- Support mutiple vector sizes on request
-- Serialize the db to a local file
-- Deserialize the db from a local file
+The main functionalities implemented include:
+- Uploading and deleting vectors using a **Hash Index and Packed Array**, achieving O(1) average lookups and deletions via a swap-with-last strategy.
+- Fast Top-K retrieval using Cosine Similarity and a **Bounded Min-Heap** to achieve O(n log k) search complexity without allocating proportional memory.
+- Full support for multiple vector sizes and dimensions.
+- Persistent versioned binary format with **CRC32 checksums** and atomic writes.
 
 This project will not (at least in the short term)
 - Provide authentication/authorization to the database or the stored data
